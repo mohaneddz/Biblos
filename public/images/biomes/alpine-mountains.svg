@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Alpine Mountains</title>
+  <desc id="desc">Stylized alpine mountains with snowy ridges and valley mist.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9dc7ef"/>
+      <stop offset="100%" stop-color="#233d63"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <path d="M0 604L230 342L408 554L620 286L862 620L1114 260L1362 570L1600 410V900H0Z" fill="#506b8a"/>
+  <path d="M0 690L226 446L398 624L624 368L848 680L1098 338L1342 628L1600 478V900H0Z" fill="#314960"/>
+  <path d="M212 364L256 420L312 364L362 448L420 392L408 554H230Z" fill="#f3fbff"/>
+  <path d="M584 336L622 392L676 336L728 418L780 360L760 506H606Z" fill="#f3fbff"/>
+  <path d="M1088 300L1128 358L1182 302L1234 388L1288 330L1266 510H1098Z" fill="#f3fbff"/>
+  <path d="M0 766C286 730 566 754 810 804C1044 852 1322 860 1600 804V900H0Z" fill="#d6e6ef"/>
+</svg>

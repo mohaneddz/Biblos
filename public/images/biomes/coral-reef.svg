@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Coral Reef</title>
+  <desc id="desc">Stylized coral reef with turquoise water and branching corals.</desc>
+  <defs>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#89f2f7"/>
+      <stop offset="45%" stop-color="#1a96ba"/>
+      <stop offset="100%" stop-color="#082d4e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#water)"/>
+  <path d="M0 622C210 566 384 566 590 626C812 690 1018 702 1228 654C1386 618 1512 620 1600 642V900H0Z" fill="#0c3554"/>
+  <path d="M0 742C248 716 490 734 706 776C946 824 1220 830 1600 768V900H0Z" fill="#07243c"/>
+  <g fill="#ffe7a6" opacity="0.18">
+    <circle cx="264" cy="180" r="10"/>
+    <circle cx="588" cy="240" r="12"/>
+    <circle cx="914" cy="178" r="8"/>
+    <circle cx="1280" cy="210" r="10"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M220 792C220 720 244 692 262 646M262 744C226 724 194 724 160 734M258 706C292 688 328 692 362 708" stroke="#ff9171" stroke-width="18"/>
+    <path d="M468 822C486 742 520 700 558 648M554 748C516 728 486 732 454 746M560 704C594 688 628 690 666 708" stroke="#ff6f9a" stroke-width="20"/>
+    <path d="M892 820C874 744 860 696 838 648M840 742C806 726 778 728 744 740M834 700C868 688 904 688 940 700" stroke="#ffa74f" stroke-width="20"/>
+    <path d="M1188 830C1200 748 1228 696 1262 640M1264 736C1230 718 1200 720 1168 736M1258 694C1292 678 1322 682 1358 700" stroke="#f26adf" stroke-width="18"/>
+  </g>
+  <ellipse cx="804" cy="644" rx="128" ry="44" fill="#ffb8c7" opacity="0.42"/>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Deep Ocean</title>
+  <desc id="desc">Stylized deep ocean with shafts of light and abyssal gradients.</desc>
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60c5e6"/>
+      <stop offset="25%" stop-color="#11527b"/>
+      <stop offset="100%" stop-color="#020a1c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sea)"/>
+  <path d="M228 0L382 0L598 900L468 900Z" fill="#b3f5ff" opacity="0.12"/>
+  <path d="M642 0L774 0L954 900L840 900Z" fill="#b3f5ff" opacity="0.08"/>
+  <path d="M1060 0L1180 0L1404 900L1290 900Z" fill="#b3f5ff" opacity="0.1"/>
+  <path d="M0 706C272 668 518 692 760 742C1004 792 1274 798 1600 736V900H0Z" fill="#031224"/>
+  <g fill="#63d0e0" opacity="0.2">
+    <circle cx="210" cy="278" r="10"/>
+    <circle cx="444" cy="344" r="8"/>
+    <circle cx="980" cy="248" r="12"/>
+    <circle cx="1258" cy="318" r="10"/>
+  </g>
+</svg>

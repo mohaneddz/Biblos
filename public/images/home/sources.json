@@ -1,0 +1,62 @@
+[
+  {
+    "localFile": "images/home/hero-african-lion.jpg",
+    "source": "https://www.pexels.com/search/african%20lion/",
+    "description": "Close-up of a majestic lion in profile view amidst lush greenery, highlighting its regal mane."
+  },
+  {
+    "localFile": "images/home/animal-red-panda.jpg",
+    "source": "https://www.pexels.com/search/red%20panda/",
+    "description": "A red panda munches on bamboo while perched on a tree branch in its natural setting."
+  },
+  {
+    "localFile": "images/home/species-snow-leopard.jpg",
+    "source": "https://www.pexels.com/search/snow%20leopard/",
+    "description": "Majestic snow leopard captured in a detailed close-up in natural habitat."
+  },
+  {
+    "localFile": "images/home/species-giant-pacific-octopus.jpg",
+    "source": "https://www.pexels.com/search/giant%20pacific%20octopus/",
+    "description": "Discover a vibrant octopus in its natural underwater habitat in Sidney, BC, Canada."
+  },
+  {
+    "localFile": "images/home/species-bald-eagle.jpg",
+    "source": "https://www.pexels.com/search/bald%20eagle/",
+    "description": "Close-up of a majestic bald eagle with piercing yellow eyes and vibrant feathers."
+  },
+  {
+    "localFile": "images/home/species-blue-whale.jpg",
+    "source": "https://www.pexels.com/search/blue%20whale/",
+    "description": "A dramatic scene of a whale tail splashing as it dives into the ocean."
+  },
+  {
+    "localFile": "images/home/ecosystem-tropical-rainforest.jpg",
+    "source": "https://www.pexels.com/search/tropical%20rainforest/",
+    "description": "Breathtaking aerial view of lush, dense tropical rainforest with vibrant greenery."
+  },
+  {
+    "localFile": "images/home/ecosystem-coral-reef.jpg",
+    "source": "https://www.pexels.com/search/coral%20reef/",
+    "description": "Explore the vibrant underwater world with colorful corals and diverse marine life in this pristine reef ecosystem."
+  },
+  {
+    "localFile": "images/home/ecosystem-african-savanna.jpg",
+    "source": "https://www.pexels.com/search/african%20savanna/",
+    "description": "Giraffes and antelope grazing under palm trees in a savanna setting with mountains."
+  },
+  {
+    "localFile": "images/home/ecosystem-arctic-tundra.jpg",
+    "source": "https://www.pexels.com/search/arctic%20tundra/",
+    "description": "Vast arctic tundra landscape with snow-covered hills under a clear blue sky during winter."
+  },
+  {
+    "localFile": "images/home/explore-tree-of-life.jpg",
+    "source": "https://www.pexels.com/search/tree%20of%20life/",
+    "description": "Stunning view of the iconic Tree of Life framed by vibrant tropical leaves in a serene setting."
+  },
+  {
+    "localFile": "images/home/explore-atlas-earth.png",
+    "source": "https://www.pexels.com/search/earth%20from%20space/",
+    "description": "Breathtaking image of Earth from space showcasing the vast blue oceans."
+  }
+]

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Sahara Desert</title>
+  <desc id="desc">Stylized desert with dunes and sun haze.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6d39d"/>
+      <stop offset="60%" stop-color="#d88a4e"/>
+      <stop offset="100%" stop-color="#6d3b1e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1230" cy="162" r="98" fill="#fff3c7" opacity="0.74"/>
+  <path d="M0 520C186 470 322 466 516 506C696 542 850 550 1048 504C1254 456 1444 466 1600 522V900H0Z" fill="#d49b52"/>
+  <path d="M0 640C226 592 412 600 622 652C826 704 1038 720 1260 678C1406 650 1520 650 1600 666V900H0Z" fill="#b97436"/>
+  <path d="M0 764C296 726 562 758 784 810C1062 874 1334 866 1600 800V900H0Z" fill="#8a5629"/>
+  <path d="M188 642C244 604 310 612 358 648C304 660 246 660 188 642Z" fill="#efd5a2" opacity="0.55"/>
+</svg>
