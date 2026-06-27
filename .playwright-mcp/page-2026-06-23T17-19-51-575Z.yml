@@ -1,0 +1,214 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - button "Minimize window" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+    - button "Maximize window" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+    - button "Close window" [ref=e10] [cursor=pointer]:
+      - img [ref=e11]
+  - generic [ref=e14]:
+    - complementary [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - generic [ref=e21]:
+            - paragraph [ref=e22]: Biblos
+            - paragraph [ref=e23]: Zoes
+        - navigation [ref=e24]:
+          - button "Home" [ref=e25] [cursor=pointer]:
+            - img [ref=e26]
+            - generic [ref=e29]: Home
+          - button "Species" [ref=e30] [cursor=pointer]:
+            - img [ref=e31]
+            - generic [ref=e37]: Species
+          - button "Tree of Life" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+            - generic [ref=e49]: Tree of Life
+          - button "Explorer" [ref=e50] [cursor=pointer]:
+            - img [ref=e51]
+            - generic [ref=e54]: Explorer
+          - button "Ecosystems" [ref=e55] [cursor=pointer]:
+            - img [ref=e56]
+            - generic [ref=e60]: Ecosystems
+          - button "AI Naturalist" [ref=e61] [cursor=pointer]:
+            - img [ref=e62]
+            - generic [ref=e64]: AI Naturalist
+          - button "Compare" [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+            - generic [ref=e70]: Compare
+          - button "Discover" [ref=e71] [cursor=pointer]:
+            - img [ref=e72]
+            - generic [ref=e75]: Discover
+          - button "Atlas" [ref=e76] [cursor=pointer]:
+            - img [ref=e77]
+            - generic [ref=e79]: Atlas
+          - button "Collection" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+            - generic [ref=e84]: Collection
+        - generic [ref=e85]:
+          - button "Downloads" [ref=e86] [cursor=pointer]:
+            - img [ref=e87]
+            - generic [ref=e89]: Downloads
+          - button "Settings" [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+            - generic [ref=e94]: Settings
+        - generic [ref=e96]:
+          - img [ref=e98]
+          - generic [ref=e101]:
+            - paragraph [ref=e102]: Local Library
+            - paragraph [ref=e103]: 2.34 TB used
+    - main [ref=e106]:
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - button [ref=e109] [cursor=pointer]:
+            - img [ref=e110]
+          - button [ref=e116] [cursor=pointer]:
+            - img [ref=e117]
+          - button [ref=e120] [cursor=pointer]
+        - generic [ref=e122]:
+          - generic [ref=e123]:
+            - paragraph [ref=e124]: Welcome to
+            - heading "Biblos Zoos" [level=1] [ref=e125]
+            - paragraph [ref=e126]: Your AI-assisted encyclopedia of life. Explore. Learn. Understand.
+            - generic [ref=e127]:
+              - img [ref=e128]
+              - generic [ref=e131]: Search for any species, habitat, behavior...
+              - generic [ref=e132]:
+                - img [ref=e133]
+                - generic [ref=e137]: AI
+            - generic [ref=e138]:
+              - generic [ref=e139]: "Examples:"
+              - button "African lion" [ref=e140] [cursor=pointer]
+              - button "Bioluminescent animals" [ref=e141] [cursor=pointer]
+              - button "Nocturnal birds" [ref=e142] [cursor=pointer]
+              - button "Animals of Madagascar" [ref=e143] [cursor=pointer]
+          - generic [ref=e144]:
+            - img "Profile view of an African lion with a full mane against a green background." [ref=e145]
+            - generic [ref=e149]:
+              - paragraph [ref=e150]: Featured Species
+              - heading "African Lion" [level=3] [ref=e151]
+              - paragraph [ref=e152]: Featured species from the home concept, now illustrated with a real wildlife photograph.
+        - generic [ref=e153]:
+          - generic [ref=e154]:
+            - generic [ref=e156]:
+              - img [ref=e157]
+              - heading "Animal of the Day" [level=2] [ref=e160]
+            - generic [ref=e161]:
+              - img "A red panda perched on a tree branch while eating bamboo." [ref=e162]
+              - generic [ref=e166]:
+                - paragraph [ref=e167]: Animal of the Day
+                - heading "Red Panda" [level=3] [ref=e168]
+                - paragraph [ref=e169]: A small arboreal mammal native to the eastern Himalayas and southwestern China.
+            - button "View Species" [ref=e171] [cursor=pointer]
+          - generic [ref=e177]:
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - img [ref=e180]
+                - heading "Recently Viewed" [level=2] [ref=e183]
+              - button "View all" [ref=e184] [cursor=pointer]
+            - generic [ref=e185]:
+              - article [ref=e186]:
+                - img "Close-up of a snow leopard's face and spotted coat." [ref=e188]
+                - generic [ref=e190]:
+                  - heading "Snow Leopard" [level=3] [ref=e191]
+                  - paragraph [ref=e192]: Panthera uncia
+                  - paragraph [ref=e193]: Mammalia
+                - generic [ref=e194]: "01"
+              - article [ref=e195]:
+                - img "A giant octopus extending its tentacles in dark underwater surroundings." [ref=e197]
+                - generic [ref=e199]:
+                  - heading "Giant Pacific Octopus" [level=3] [ref=e200]
+                  - paragraph [ref=e201]: Enteroctopus dofleini
+                  - paragraph [ref=e202]: Mollusca
+                - generic [ref=e203]: "02"
+              - article [ref=e204]:
+                - img "Close-up portrait of a bald eagle with a yellow beak." [ref=e206]
+                - generic [ref=e208]:
+                  - heading "Bald Eagle" [level=3] [ref=e209]
+                  - paragraph [ref=e210]: Haliaeetus leucocephalus
+                  - paragraph [ref=e211]: Aves
+                - generic [ref=e212]: "03"
+              - article [ref=e213]:
+                - img "A whale tail rising out of the ocean with mountains in the distance." [ref=e215]
+                - generic [ref=e217]:
+                  - heading "Blue Whale" [level=3] [ref=e218]
+                  - paragraph [ref=e219]: Balaenoptera musculus
+                  - paragraph [ref=e220]: Mammalia
+                - generic [ref=e221]: "04"
+          - generic [ref=e222]:
+            - generic [ref=e223]:
+              - generic [ref=e224]:
+                - img [ref=e225]
+                - heading "Featured Ecosystems" [level=2] [ref=e228]
+              - button "View all" [ref=e229] [cursor=pointer]
+            - generic [ref=e230]:
+              - article [ref=e231]:
+                - generic [ref=e232]:
+                  - img "Dense tropical rainforest canopy viewed from above." [ref=e233]
+                  - generic [ref=e237]:
+                    - paragraph [ref=e238]: Biome
+                    - heading "Tropical Rainforest" [level=3] [ref=e239]
+                    - paragraph [ref=e240]: 1,248 species
+              - article [ref=e241]:
+                - generic [ref=e242]:
+                  - img "Colorful coral reef with fish swimming through clear blue water." [ref=e243]
+                  - generic [ref=e247]:
+                    - paragraph [ref=e248]: Biome
+                    - heading "Coral Reef" [level=3] [ref=e249]
+                    - paragraph [ref=e250]: 973 species
+              - article [ref=e251]:
+                - generic [ref=e252]:
+                  - img "Savanna scene with giraffes and antelope beneath palm trees and mountains." [ref=e253]
+                  - generic [ref=e257]:
+                    - paragraph [ref=e258]: Biome
+                    - heading "African Savanna" [level=3] [ref=e259]
+                    - paragraph [ref=e260]: 856 species
+              - article [ref=e261]:
+                - generic [ref=e262]:
+                  - img "Snow-covered arctic tundra landscape under a pale blue sky." [ref=e263]
+                  - generic [ref=e267]:
+                    - paragraph [ref=e268]: Biome
+                    - heading "Arctic Tundra" [level=3] [ref=e269]
+                    - paragraph [ref=e270]: 612 species
+        - generic [ref=e271]:
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - img [ref=e274]
+              - generic [ref=e284]: Explore Life
+            - paragraph [ref=e285]: Jump into the areas that interest you.
+          - generic [ref=e286]:
+            - article [ref=e287]:
+              - generic [ref=e289]:
+                - heading "Tree of Life" [level=3] [ref=e290]
+                - paragraph [ref=e291]: Explore the relationships between all living things.
+                - img "A broad tree framed by tropical leaves." [ref=e293]
+                - img [ref=e296]
+            - article [ref=e298]:
+              - generic [ref=e300]:
+                - heading "Explorer" [level=3] [ref=e301]
+                - paragraph [ref=e302]: Filter and find species using powerful tools.
+                - img "Snow leopard close-up used as an explorer thumbnail." [ref=e304]
+                - img [ref=e307]
+            - article [ref=e309]:
+              - generic [ref=e311]:
+                - heading "AI Naturalist" [level=3] [ref=e312]
+                - paragraph [ref=e313]: Ask questions, identify species, and discover with AI.
+                - img "Red panda image used as an AI naturalist thumbnail." [ref=e315]
+                - img [ref=e318]
+            - article [ref=e320]:
+              - generic [ref=e322]:
+                - heading "Compare" [level=3] [ref=e323]
+                - paragraph [ref=e324]: Compare species side by side.
+                - img "Bald eagle portrait used as a comparison thumbnail." [ref=e326]
+                - img [ref=e329]
+            - article [ref=e331]:
+              - generic [ref=e333]:
+                - heading "Atlas" [level=3] [ref=e334]
+                - paragraph [ref=e335]: Explore the world and its incredible biodiversity.
+                - img "Earth seen from space against a black background." [ref=e337]
+                - img [ref=e340]
+        - generic [ref=e342]:
+          - paragraph [ref=e343]: "\"The clearest way into the Universe is through a forest wilderness.\" John Muir"
+          - generic [ref=e344]:
+            - generic [ref=e345]: v1.0.0
+            - generic [ref=e346]: All systems operational

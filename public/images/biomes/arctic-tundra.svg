@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Arctic Tundra</title>
+  <desc id="desc">Stylized arctic tundra with ice, aurora glow, and polar sea.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1d3150"/>
+      <stop offset="60%" stop-color="#7ab8c7"/>
+      <stop offset="100%" stop-color="#dcecf4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <path d="M0 548C206 516 396 520 590 568C788 618 996 630 1184 600C1368 570 1498 574 1600 592V900H0Z" fill="#99c7d4"/>
+  <path d="M0 668C268 636 504 656 730 704C972 754 1248 758 1600 696V900H0Z" fill="#cfe7ee"/>
+  <path d="M0 786C314 760 650 790 946 830C1186 862 1408 862 1600 830V900H0Z" fill="#edf7fb"/>
+  <path d="M132 218C356 102 544 110 716 190C846 252 960 262 1088 210C1212 160 1346 150 1468 206" fill="none" stroke="#8ef2cf" stroke-width="22" opacity="0.28" stroke-linecap="round"/>
+  <path d="M128 300L350 266L456 292L620 246L786 284L922 252L1070 292L1240 246L1386 282L1546 262V398H128Z" fill="#d8f3ff" opacity="0.5"/>
+</svg>
