@@ -4,9 +4,10 @@ export type ConservationStatus =
   | "Vulnerable"
   | "Endangered"
   | "Critically Endangered"
-  | "Extinct";
+  | "Extinct"
+  | "Unknown";
 
-export type ActivityPattern = "Diurnal" | "Nocturnal" | "Crepuscular" | "Cathemeral";
+export type ActivityPattern = "Diurnal" | "Nocturnal" | "Crepuscular" | "Cathemeral" | "Unknown";
 
 export type Continent =
   | "Africa"
@@ -16,13 +17,15 @@ export type Continent =
   | "South America"
   | "Australia"
   | "Antarctica"
-  | "Oceans";
+  | "Oceans"
+  | "Unknown";
 
 export type Animal = {
   id: string;
+  gbifTaxonKey?: number;
   commonName: string;
   scientificName: string;
-  averageLifespanYears: number;
+  averageLifespanYears: number | null;
   shortDescription: string;
   detailedDescription: string;
   coolFacts: string[];
@@ -41,15 +44,17 @@ export type Animal = {
   continents: Continent[];
   conservationStatus: ConservationStatus;
   size: {
-    lengthCm?: number;
-    heightCm?: number;
-    wingspanCm?: number;
+    lengthCm?: number | null;
+    heightCm?: number | null;
+    wingspanCm?: number | null;
   };
-  weightKg?: number;
+  weightKg?: number | null;
   images: string[];
+  heroImage?: string | null;
   has3DModel: boolean;
   sourceUrls?: string[];
   lastFetchedAt?: string;
+  partial?: boolean;
 };
 
 export type AppSettings = {

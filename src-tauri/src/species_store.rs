@@ -1,0 +1,1137 @@
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    env,
+    fs,
+    path::{Path, PathBuf},
+};
+
+use anyhow::{anyhow, Context, Result};
+use chrono::Utc;
+use reqwest::Client;
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
+
+const DEFAULT_LOCAL_LIMIT: usize = 24;
+const SEED_PAGE_SIZE: usize = 100;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeciesSearchHit {
+    pub id: String,
+    pub gbif_taxon_key: i64,
+    pub scientific_name: String,
+    pub canonical_name: String,
+    pub common_name: Option<String>,
+    pub rank: String,
+    pub kingdom: Option<String>,
+    pub phylum: Option<String>,
+    pub class_name: Option<String>,
+    pub order_name: Option<String>,
+    pub family: Option<String>,
+    pub genus: Option<String>,
+    pub source: String,
+    pub updated_at: String,
+    pub score: f64,
+    pub match_reason: String,
+    pub is_live_fallback: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResponse {
+    pub hits: Vec<SpeciesSearchHit>,
+    pub used_live_fallback: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeciesProfilePayload {
+    pub id: String,
+    pub gbif_taxon_key: i64,
+    pub animal: Value,
+    pub cached: bool,
+    pub partial: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GbifSearchResponse {
+    #[serde(default)]
+    results: Vec<GbifSpeciesSearchItem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GbifSpeciesSearchItem {
+    #[serde(rename = "taxonKey")]
+    taxon_key: Option<i64>,
+    #[serde(rename = "acceptedTaxonKey")]
+    accepted_taxon_key: Option<i64>,
+    #[serde(rename = "scientificName")]
+    scientific_name: Option<String>,
+    #[serde(rename = "canonicalName")]
+    canonical_name: Option<String>,
+    #[serde(rename = "vernacularName")]
+    vernacular_name: Option<String>,
+    rank: Option<String>,
+    kingdom: Option<String>,
+    phylum: Option<String>,
+    #[serde(rename = "class")]
+    class_name: Option<String>,
+    order: Option<String>,
+    family: Option<String>,
+    genus: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct GbifSpeciesDetails {
+    #[serde(rename = "taxonKey")]
+    taxon_key: Option<i64>,
+    #[serde(rename = "scientificName")]
+    scientific_name: Option<String>,
+    #[serde(rename = "canonicalName")]
+    canonical_name: Option<String>,
+    rank: Option<String>,
+    kingdom: Option<String>,
+    phylum: Option<String>,
+    #[serde(rename = "class")]
+    class_name: Option<String>,
+    order: Option<String>,
+    family: Option<String>,
+    genus: Option<String>,
+    species: Option<String>,
+    habitat: Option<String>,
+    threat: Option<String>,
+    native: Option<bool>,
+    extinct: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GbifVernacularResponseItem {
+    #[serde(rename = "vernacularName")]
+    vernacular_name: Option<String>,
+    language: Option<String>,
+    preferred: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikipediaSummary {
+    title: Option<String>,
+    extract: Option<String>,
+    thumbnail: Option<WikipediaImage>,
+    originalimage: Option<WikipediaImage>,
+    content_urls: Option<WikipediaContentUrls>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikipediaImage {
+    source: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikipediaContentUrls {
+    desktop: Option<WikipediaDesktopUrl>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikipediaDesktopUrl {
+    page: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikidataSearchResponse {
+    #[serde(default)]
+    search: Vec<WikidataSearchItem>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct WikidataSearchItem {
+    id: Option<String>,
+    label: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct INaturalistSearchResponse {
+    #[serde(default)]
+    results: Vec<INaturalistTaxon>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct INaturalistTaxon {
+    id: Option<i64>,
+    name: Option<String>,
+    preferred_common_name: Option<String>,
+    iconic_taxon_name: Option<String>,
+    default_photo: Option<INaturalistPhoto>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct INaturalistPhoto {
+    medium_url: Option<String>,
+    large_url: Option<String>,
+    original_url: Option<String>,
+    license_code: Option<String>,
+    attribution: Option<String>,
+    attribution_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GroqChatResponse {
+    choices: Vec<GroqChoice>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GroqChoice {
+    message: GroqMessage,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GroqMessage {
+    content: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct IndexRecord {
+    gbif_taxon_key: i64,
+    scientific_name: String,
+    canonical_name: String,
+    common_name: Option<String>,
+    rank: String,
+    kingdom: Option<String>,
+    phylum: Option<String>,
+    class_name: Option<String>,
+    order_name: Option<String>,
+    family: Option<String>,
+    genus: Option<String>,
+    source: String,
+    updated_at: String,
+}
+
+pub fn db_path_for_app(app: Option<&AppHandle>) -> Result<PathBuf> {
+    dotenvy::dotenv().ok();
+
+    if let Ok(explicit) = env::var("BIBLOS_DB_PATH") {
+        let path = PathBuf::from(explicit);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        return Ok(path);
+    }
+
+    if let Some(app) = app {
+        let dir = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| anyhow!("failed to resolve app data dir: {error}"))?;
+        fs::create_dir_all(&dir)?;
+        return Ok(dir.join("biblos.sqlite3"));
+    }
+
+    let path = PathBuf::from("src-tauri").join("biblos.sqlite3");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(path)
+}
+
+fn open_connection(path: &Path) -> Result<Connection> {
+    let connection = Connection::open(path)?;
+    connection.execute_batch(
+        "
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = NORMAL;
+        PRAGMA foreign_keys = ON;
+        PRAGMA temp_store = MEMORY;
+
+        CREATE TABLE IF NOT EXISTS species_index (
+          id TEXT PRIMARY KEY,
+          gbif_taxon_key INTEGER NOT NULL UNIQUE,
+          scientific_name TEXT NOT NULL,
+          canonical_name TEXT NOT NULL,
+          common_name TEXT,
+          rank TEXT NOT NULL,
+          kingdom TEXT,
+          phylum TEXT,
+          class_name TEXT,
+          order_name TEXT,
+          family TEXT,
+          genus TEXT,
+          source TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS species_profiles (
+          gbif_taxon_key INTEGER PRIMARY KEY,
+          full_json TEXT NOT NULL,
+          hydrated_at TEXT NOT NULL
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS species_index_fts USING fts5(
+          id UNINDEXED,
+          scientific_name,
+          canonical_name,
+          common_name,
+          class_name,
+          family,
+          genus,
+          tokenize = 'unicode61'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS species_index_ai AFTER INSERT ON species_index BEGIN
+          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
+          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name, coalesce(new.common_name, ''), coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS species_index_ad AFTER DELETE ON species_index BEGIN
+          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
+          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name, coalesce(old.common_name, ''), coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS species_index_au AFTER UPDATE ON species_index BEGIN
+          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
+          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name, coalesce(old.common_name, ''), coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
+          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name, coalesce(new.common_name, ''), coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
+        END;
+        ",
+    )?;
+    Ok(connection)
+}
+
+fn make_species_id(gbif_taxon_key: i64) -> String {
+    format!("gbif-{gbif_taxon_key}")
+}
+
+fn normalize(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+fn fts_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(|term| format!("{}*", term.replace('"', "")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, String) {
+    let q = normalize(query);
+    let common = record.common_name.as_deref().map(normalize).unwrap_or_default();
+    let scientific = normalize(&record.scientific_name);
+    let canonical = normalize(&record.canonical_name);
+
+    if !common.is_empty() && common == q {
+        return (300.0, "exact_common".into());
+    }
+    if scientific == q || canonical == q {
+        return (260.0, "exact_scientific".into());
+    }
+    if !common.is_empty() && common.starts_with(&q) {
+        return (220.0, "prefix_common".into());
+    }
+    if scientific.starts_with(&q) || canonical.starts_with(&q) {
+        return (200.0, "prefix_scientific".into());
+    }
+
+    let fuzzy = best_similarity(&q, &[&common, &scientific, &canonical, record.family.as_deref().unwrap_or(""), record.genus.as_deref().unwrap_or("")]);
+    (120.0 + fuzzy * 40.0 + fts_rank.max(0.0), "fts".into())
+}
+
+fn best_similarity(query: &str, values: &[&str]) -> f64 {
+    values
+        .iter()
+        .filter(|value| !value.is_empty())
+        .map(|value| normalized_similarity(query, value))
+        .fold(0.0, f64::max)
+}
+
+fn normalized_similarity(a: &str, b: &str) -> f64 {
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    if a == b {
+        return 1.0;
+    }
+    let distance = levenshtein(a, b) as f64;
+    let max_len = a.len().max(b.len()) as f64;
+    (1.0 - distance / max_len).max(0.0)
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let mut costs: Vec<usize> = (0..=b_chars.len()).collect();
+
+    for (i, ca) in a_chars.iter().enumerate() {
+        let mut last = i;
+        costs[0] = i + 1;
+
+        for (j, cb) in b_chars.iter().enumerate() {
+            let current = costs[j + 1];
+            costs[j + 1] = if ca == cb {
+                last
+            } else {
+                1 + last.min(costs[j]).min(costs[j + 1])
+            };
+            last = current;
+        }
+    }
+
+    costs[b_chars.len()]
+}
+
+fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
+    Ok(IndexRecord {
+        gbif_taxon_key: row.get("gbif_taxon_key")?,
+        scientific_name: row.get("scientific_name")?,
+        canonical_name: row.get("canonical_name")?,
+        common_name: row.get("common_name")?,
+        rank: row.get("rank")?,
+        kingdom: row.get("kingdom")?,
+        phylum: row.get("phylum")?,
+        class_name: row.get("class_name")?,
+        order_name: row.get("order_name")?,
+        family: row.get("family")?,
+        genus: row.get("genus")?,
+        source: row.get("source")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn to_search_hit(record: IndexRecord, score: f64, match_reason: String, is_live_fallback: bool) -> SpeciesSearchHit {
+    SpeciesSearchHit {
+        id: make_species_id(record.gbif_taxon_key),
+        gbif_taxon_key: record.gbif_taxon_key,
+        scientific_name: record.scientific_name,
+        canonical_name: record.canonical_name,
+        common_name: record.common_name,
+        rank: record.rank,
+        kingdom: record.kingdom,
+        phylum: record.phylum,
+        class_name: record.class_name,
+        order_name: record.order_name,
+        family: record.family,
+        genus: record.genus,
+        source: record.source,
+        updated_at: record.updated_at,
+        score,
+        match_reason,
+        is_live_fallback,
+    }
+}
+
+pub fn initialize_database(app: Option<&AppHandle>) -> Result<PathBuf> {
+    let path = db_path_for_app(app)?;
+    let _ = open_connection(&path)?;
+    Ok(path)
+}
+
+fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result<()> {
+    connection.execute(
+        "
+        INSERT INTO species_index (
+          id, gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        ON CONFLICT(gbif_taxon_key) DO UPDATE SET
+          id = excluded.id,
+          scientific_name = excluded.scientific_name,
+          canonical_name = excluded.canonical_name,
+          common_name = excluded.common_name,
+          rank = excluded.rank,
+          kingdom = excluded.kingdom,
+          phylum = excluded.phylum,
+          class_name = excluded.class_name,
+          order_name = excluded.order_name,
+          family = excluded.family,
+          genus = excluded.genus,
+          source = excluded.source,
+          updated_at = excluded.updated_at
+        ",
+        params![
+            make_species_id(record.gbif_taxon_key),
+            record.gbif_taxon_key,
+            record.scientific_name,
+            record.canonical_name,
+            record.common_name,
+            record.rank,
+            record.kingdom,
+            record.phylum,
+            record.class_name,
+            record.order_name,
+            record.family,
+            record.genus,
+            record.source,
+            record.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>) -> Option<IndexRecord> {
+    let gbif_taxon_key = item.accepted_taxon_key.or(item.taxon_key)?;
+    let scientific_name = item.scientific_name.clone()?;
+    let canonical_name = item.canonical_name.clone().unwrap_or_else(|| scientific_name.clone());
+
+    Some(IndexRecord {
+        gbif_taxon_key,
+        scientific_name,
+        canonical_name,
+        common_name,
+        rank: item.rank.clone().unwrap_or_else(|| "SPECIES".into()),
+        kingdom: item.kingdom.clone(),
+        phylum: item.phylum.clone(),
+        class_name: item.class_name.clone(),
+        order_name: item.order.clone(),
+        family: item.family.clone(),
+        genus: item.genus.clone(),
+        source: "GBIF".into(),
+        updated_at: Utc::now().to_rfc3339(),
+    })
+}
+
+pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> {
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let mut seen = HashSet::new();
+    let mut inserted = 0usize;
+    let mut offset = 0usize;
+
+    while inserted < limit {
+        let batch_limit = SEED_PAGE_SIZE.min(limit - inserted);
+        let url = format!(
+            "https://api.gbif.org/v1/species/search?kingdom=Animalia&rank=SPECIES&status=ACCEPTED&limit={batch_limit}&offset={offset}"
+        );
+        let response = client.get(url).send().await?;
+        if !response.status().is_success() {
+            return Err(anyhow!("GBIF seed request failed with status {}", response.status()));
+        }
+        let payload: GbifSearchResponse = response.json().await?;
+        if payload.results.is_empty() {
+            break;
+        }
+
+        let fetched_count = payload.results.len();
+
+        for item in payload.results {
+            let Some(taxon_key) = item.accepted_taxon_key.or(item.taxon_key) else {
+                continue;
+            };
+            if !seen.insert(taxon_key) {
+                continue;
+            }
+
+            let common_name = item.vernacular_name.clone();
+            if let Some(record) = gbif_item_to_record(&item, common_name) {
+                upsert_species_index(&connection, &record)?;
+                inserted += 1;
+                if inserted >= limit {
+                    break;
+                }
+            }
+        }
+
+        offset += fetched_count;
+    }
+
+    Ok(inserted)
+}
+
+fn local_fts_search(connection: &Connection, query: &str, limit: usize) -> Result<Vec<SpeciesSearchHit>> {
+    if query.trim().is_empty() {
+        let mut stmt = connection.prepare(
+            "
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            FROM species_index
+            ORDER BY common_name IS NULL, common_name ASC, scientific_name ASC
+            LIMIT ?1
+            ",
+        )?;
+
+        let rows = stmt.query_map(params![limit as i64], row_to_record)?;
+        let mut hits = Vec::new();
+        for row in rows {
+            let record = row?;
+            hits.push(to_search_hit(record, 0.0, "browse".into(), false));
+        }
+        return Ok(hits);
+    }
+
+    let mut results = Vec::new();
+    let fts = fts_query(query);
+    let mut stmt = connection.prepare(
+        "
+        SELECT si.gbif_taxon_key, si.scientific_name, si.canonical_name, si.common_name, si.rank, si.kingdom, si.phylum, si.class_name, si.order_name, si.family, si.genus, si.source, si.updated_at, bm25(species_index_fts) AS rank_score
+        FROM species_index_fts
+        JOIN species_index si ON si.rowid = species_index_fts.rowid
+        WHERE species_index_fts MATCH ?1
+        LIMIT ?2
+        ",
+    )?;
+
+    let rows = stmt.query_map(params![fts, (limit * 3) as i64], |row| {
+        Ok((row_to_record(row)?, row.get::<_, f64>("rank_score")?))
+    })?;
+
+    for row in rows {
+        let (record, rank_score) = row?;
+        let (score, match_reason) = score_local_hit(&record, query, -rank_score);
+        results.push(to_search_hit(record, score, match_reason, false));
+    }
+
+    if results.is_empty() {
+        let mut fallback_stmt = connection.prepare(
+            "
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            FROM species_index
+            WHERE scientific_name LIKE ?1 OR canonical_name LIKE ?1 OR common_name LIKE ?1 OR genus LIKE ?1 OR family LIKE ?1
+            LIMIT 250
+            ",
+        )?;
+        let like_query = format!("%{}%", query.trim());
+        let rows = fallback_stmt.query_map(params![like_query], row_to_record)?;
+        for row in rows {
+            let record = row?;
+            let similarity = best_similarity(
+                &normalize(query),
+                &[
+                    record.common_name.as_deref().unwrap_or(""),
+                    &record.scientific_name,
+                    &record.canonical_name,
+                    record.genus.as_deref().unwrap_or(""),
+                    record.family.as_deref().unwrap_or(""),
+                ],
+            );
+            if similarity >= 0.45 {
+                results.push(to_search_hit(record, 80.0 + similarity * 50.0, "fuzzy".into(), false));
+            }
+        }
+    }
+
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+    results.truncate(limit);
+    Ok(results)
+}
+
+pub fn search_index(app: Option<&AppHandle>, query: &str, limit: usize) -> Result<SearchResponse> {
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let hits = local_fts_search(&connection, query, limit)?;
+    Ok(SearchResponse {
+        hits,
+        used_live_fallback: false,
+    })
+}
+
+pub async fn live_search_fallback(app: Option<&AppHandle>, query: &str, limit: usize) -> Result<SearchResponse> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(SearchResponse {
+            hits: Vec::new(),
+            used_live_fallback: false,
+        });
+    }
+
+    let local = search_index(app, trimmed, limit)?;
+    let strong_local = local.hits.first().map(|hit| hit.score >= 180.0).unwrap_or(false);
+    if strong_local || !local.hits.is_empty() {
+        return Ok(local);
+    }
+
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let url = format!(
+        "https://api.gbif.org/v1/species/search?q={}&kingdom=Animalia&rank=SPECIES&status=ACCEPTED&limit={}",
+        urlencoding::encode(trimmed),
+        limit
+    );
+
+    let response = client.get(url).send().await?;
+    if !response.status().is_success() {
+        return Ok(local);
+    }
+
+    let payload: GbifSearchResponse = response.json().await?;
+    let mut hits = Vec::new();
+
+    for item in payload.results {
+        let Some(_taxon_key) = item.accepted_taxon_key.or(item.taxon_key) else {
+            continue;
+        };
+        if let Some(record) = gbif_item_to_record(&item, item.vernacular_name.clone()) {
+            upsert_species_index(&connection, &record)?;
+            let (score, reason) = score_local_hit(&record, trimmed, 0.0);
+            hits.push(to_search_hit(record, score, reason, true));
+        }
+    }
+
+    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+    hits.truncate(limit);
+
+    Ok(SearchResponse {
+        hits,
+        used_live_fallback: true,
+    })
+}
+
+fn open_profile_cache(connection: &Connection, gbif_taxon_key: i64) -> Result<Option<SpeciesProfilePayload>> {
+    let row: Option<(String, String)> = connection
+        .query_row(
+            "SELECT full_json, hydrated_at FROM species_profiles WHERE gbif_taxon_key = ?1",
+            params![gbif_taxon_key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+
+    if let Some((full_json, _hydrated_at)) = row {
+        let animal: Value = serde_json::from_str(&full_json)?;
+        let id = animal.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let partial = animal.get("partial").and_then(Value::as_bool).unwrap_or(false);
+        return Ok(Some(SpeciesProfilePayload {
+            id,
+            gbif_taxon_key,
+            animal,
+            cached: true,
+            partial,
+        }));
+    }
+
+    Ok(None)
+}
+
+async fn fetch_json<T: for<'de> Deserialize<'de>>(client: &Client, url: &str) -> Option<T> {
+    let response = client.get(url).send().await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    response.json::<T>().await.ok()
+}
+
+async fn fetch_wikipedia_summary(client: &Client, candidate: &str) -> Option<WikipediaSummary> {
+    let title = candidate.replace(' ', "_");
+    let url = format!("https://en.wikipedia.org/api/rest_v1/page/summary/{}", urlencoding::encode(&title));
+    fetch_json(client, &url).await
+}
+
+async fn fetch_wikidata_search(client: &Client, candidate: &str) -> Option<WikidataSearchResponse> {
+    let url = format!(
+        "https://www.wikidata.org/w/api.php?action=wbsearchentities&search={}&language=en&format=json&limit=5",
+        urlencoding::encode(candidate)
+    );
+    fetch_json(client, &url).await
+}
+
+async fn fetch_inaturalist_taxon(client: &Client, scientific_name: &str, common_name: Option<&str>) -> Option<INaturalistTaxon> {
+    for candidate in [Some(scientific_name), common_name].into_iter().flatten() {
+        let url = format!(
+            "https://api.inaturalist.org/v1/taxa?q={}&per_page=5",
+            urlencoding::encode(candidate)
+        );
+        let response: INaturalistSearchResponse = fetch_json(client, &url).await?;
+        if let Some(exact) = response
+            .results
+            .iter()
+            .find(|item| item.name.as_deref().map(normalize) == Some(normalize(scientific_name)))
+        {
+            return Some(exact.clone());
+        }
+        if let Some(first) = response.results.into_iter().next() {
+            return Some(first);
+        }
+    }
+    None
+}
+
+fn infer_conservation_status(raw: &[String], gbif: &GbifSpeciesDetails) -> &'static str {
+    let joined = normalize(&raw.join(" "));
+    if joined.contains("critically endangered") {
+        "Critically Endangered"
+    } else if joined.contains("endangered") {
+        "Endangered"
+    } else if joined.contains("vulnerable") {
+        "Vulnerable"
+    } else if joined.contains("near threatened") {
+        "Near Threatened"
+    } else if gbif.extinct.unwrap_or(false) {
+        "Extinct"
+    } else {
+        "Unknown"
+    }
+}
+
+fn infer_diet(text: &str) -> &'static str {
+    let value = normalize(text);
+    if value.contains("herbiv") {
+        "Herbivore"
+    } else if value.contains("omniv") {
+        "Omnivore"
+    } else if value.contains("carniv") || value.contains("predator") {
+        "Carnivore"
+    } else {
+        "Unknown"
+    }
+}
+
+fn infer_activity(text: &str) -> &'static str {
+    let value = normalize(text);
+    if value.contains("nocturn") {
+        "Nocturnal"
+    } else if value.contains("crepus") {
+        "Crepuscular"
+    } else if value.contains("cathemer") {
+        "Cathemeral"
+    } else if value.contains("diurn") {
+        "Diurnal"
+    } else {
+        "Unknown"
+    }
+}
+
+fn infer_habitat(parts: &[String], gbif: &GbifSpeciesDetails) -> Vec<String> {
+    let mut habitats = Vec::new();
+    if let Some(habitat) = &gbif.habitat {
+        habitats.push(habitat.clone());
+    }
+    for keyword in ["forest", "grassland", "savannah", "wetland", "ocean", "coast", "mountain", "desert", "tundra", "rainforest", "mangrove", "urban"] {
+        if parts.iter().any(|part| normalize(part).contains(keyword)) {
+            habitats.push(keyword.to_string());
+        }
+    }
+    habitats.sort();
+    habitats.dedup();
+    if habitats.is_empty() {
+        habitats.push("Unknown".into());
+    }
+    habitats
+}
+
+async fn groq_enrich(raw: &Value) -> Option<Value> {
+    dotenvy::dotenv().ok();
+    let api_key = env::var("GROQ_API_KEY").ok()?;
+    if api_key.trim().is_empty() {
+        return None;
+    }
+
+    let client = Client::builder().user_agent("Biblos/0.1").build().ok()?;
+    let prompt = format!(
+        "You are normalizing animal encyclopedia data. Only use the raw facts provided. Return strict JSON with keys short_description, detailed_description, habitat, diet, activity_pattern, conservation_status, continents, cool_facts. Use null or 'Unknown' when unsupported. Raw data: {}",
+        raw
+    );
+
+    let body = json!({
+        "model": "llama-3.3-70b-versatile",
+        "temperature": 0.1,
+        "messages": [
+            {"role": "system", "content": "Return only valid JSON. Do not invent facts."},
+            {"role": "user", "content": prompt}
+        ]
+    });
+
+    let response = client
+        .post("https://api.groq.com/openai/v1/chat/completions")
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let payload: GroqChatResponse = response.json().await.ok()?;
+    let content = payload.choices.first()?.message.content.as_ref()?;
+    serde_json::from_str(content).ok()
+}
+
+fn string_array(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            items.iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+async fn hydrate_species_record(record: &IndexRecord) -> Result<Value> {
+    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let gbif_details: GbifSpeciesDetails = fetch_json(
+        &client,
+        &format!("https://api.gbif.org/v1/species/{}", record.gbif_taxon_key),
+    )
+    .await
+    .ok_or_else(|| anyhow!("GBIF details not found"))?;
+
+    let wiki_summary = if let Some(summary) = fetch_wikipedia_summary(&client, &record.scientific_name).await {
+        Some(summary)
+    } else if let Some(common_name) = record.common_name.as_deref() {
+        fetch_wikipedia_summary(&client, common_name).await
+    } else {
+        None
+    };
+
+    let wikidata = if let Some(summary) = fetch_wikidata_search(&client, &record.scientific_name).await {
+        Some(summary)
+    } else if let Some(common_name) = record.common_name.as_deref() {
+        fetch_wikidata_search(&client, common_name).await
+    } else {
+        None
+    };
+
+    let inat = fetch_inaturalist_taxon(&client, &record.scientific_name, record.common_name.as_deref()).await;
+
+    let hero_image = wiki_summary
+        .as_ref()
+        .and_then(|summary| summary.originalimage.as_ref().and_then(|image| image.source.clone()))
+        .or_else(|| wiki_summary.as_ref().and_then(|summary| summary.thumbnail.as_ref().and_then(|image| image.source.clone())))
+        .or_else(|| inat.as_ref().and_then(|taxon| taxon.default_photo.as_ref().and_then(|photo| photo.large_url.clone().or(photo.original_url.clone()).or(photo.medium_url.clone()))));
+
+    let sources = vec![
+        Some("https://www.gbif.org/".to_string()),
+        wiki_summary
+            .as_ref()
+            .and_then(|summary| summary.content_urls.as_ref())
+            .and_then(|urls| urls.desktop.as_ref())
+            .and_then(|desktop| desktop.page.clone()),
+        Some("https://www.wikidata.org/".to_string()),
+        inat.as_ref().and_then(|taxon| taxon.id.map(|id| format!("https://www.inaturalist.org/taxa/{id}"))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+
+    let raw_text_parts = vec![
+        wiki_summary.as_ref().and_then(|summary| summary.extract.clone()),
+        wikidata
+            .as_ref()
+            .and_then(|payload| payload.search.first())
+            .and_then(|item| item.description.clone()),
+        gbif_details.habitat.clone(),
+        gbif_details.threat.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+
+    let raw_payload = json!({
+        "gbif": gbif_details,
+        "wikipedia": wiki_summary,
+        "wikidata": wikidata,
+        "inat": inat,
+        "source_urls": sources,
+    });
+
+    let ai = groq_enrich(&raw_payload).await;
+    let summary_text = ai
+        .as_ref()
+        .and_then(|value| value.get("short_description"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| wiki_summary.as_ref().and_then(|summary| summary.extract.clone()))
+        .unwrap_or_else(|| format!("{} profile is still being hydrated from open biodiversity sources.", record.canonical_name));
+
+    let detail_text = ai
+        .as_ref()
+        .and_then(|value| value.get("detailed_description"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| wiki_summary.as_ref().and_then(|summary| summary.extract.clone()))
+        .unwrap_or_else(|| summary_text.clone());
+
+    let habitats = {
+        let from_ai = string_array(ai.as_ref().and_then(|value| value.get("habitat")));
+        if from_ai.is_empty() {
+            infer_habitat(&raw_text_parts, &gbif_details)
+        } else {
+            from_ai
+        }
+    };
+
+    let diet = ai
+        .as_ref()
+        .and_then(|value| value.get("diet"))
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| infer_diet(&raw_text_parts.join(" ")))
+        .to_string();
+    let activity = ai
+        .as_ref()
+        .and_then(|value| value.get("activity_pattern"))
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| infer_activity(&raw_text_parts.join(" ")))
+        .to_string();
+    let conservation_status = ai
+        .as_ref()
+        .and_then(|value| value.get("conservation_status"))
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| infer_conservation_status(&raw_text_parts, &gbif_details))
+        .to_string();
+
+    let cool_facts = {
+        let from_ai = string_array(ai.as_ref().and_then(|value| value.get("cool_facts")));
+        if from_ai.is_empty() {
+            raw_text_parts.iter().take(3).cloned().collect::<Vec<_>>()
+        } else {
+            from_ai
+        }
+    };
+
+    let continents = {
+        let from_ai = string_array(ai.as_ref().and_then(|value| value.get("continents")));
+        if from_ai.is_empty() {
+            vec!["Unknown".into()]
+        } else {
+            from_ai
+        }
+    };
+
+    Ok(json!({
+        "id": make_species_id(record.gbif_taxon_key),
+        "gbifTaxonKey": record.gbif_taxon_key,
+        "commonName": record.common_name.clone().unwrap_or_else(|| record.canonical_name.clone()),
+        "scientificName": record.scientific_name,
+        "averageLifespanYears": Value::Null,
+        "shortDescription": summary_text,
+        "detailedDescription": detail_text,
+        "coolFacts": cool_facts,
+        "classification": {
+            "kingdom": gbif_details.kingdom.or(record.kingdom.clone()).unwrap_or_else(|| "Animalia".into()),
+            "phylum": gbif_details.phylum.or(record.phylum.clone()).unwrap_or_else(|| "Unknown".into()),
+            "className": gbif_details.class_name.or(record.class_name.clone()).unwrap_or_else(|| "Unknown".into()),
+            "order": gbif_details.order.or(record.order_name.clone()).unwrap_or_else(|| "Unknown".into()),
+            "family": gbif_details.family.or(record.family.clone()).unwrap_or_else(|| "Unknown".into()),
+            "genus": gbif_details.genus.or(record.genus.clone()).unwrap_or_else(|| "Unknown".into()),
+            "species": gbif_details.species.unwrap_or_else(|| record.canonical_name.clone())
+        },
+        "habitat": habitats,
+        "diet": diet,
+        "activityPattern": activity,
+        "continents": continents,
+        "conservationStatus": conservation_status,
+        "size": {
+            "lengthCm": Value::Null,
+            "heightCm": Value::Null,
+            "wingspanCm": Value::Null
+        },
+        "weightKg": Value::Null,
+        "images": hero_image.clone().map(|value| vec![value]).unwrap_or_default(),
+        "heroImage": hero_image,
+        "has3DModel": false,
+        "sourceUrls": sources,
+        "lastFetchedAt": Utc::now().to_rfc3339(),
+        "partial": false
+    }))
+}
+
+fn save_profile(connection: &Connection, gbif_taxon_key: i64, animal: &Value) -> Result<()> {
+    connection.execute(
+        "
+        INSERT INTO species_profiles (gbif_taxon_key, full_json, hydrated_at)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(gbif_taxon_key) DO UPDATE SET
+          full_json = excluded.full_json,
+          hydrated_at = excluded.hydrated_at
+        ",
+        params![gbif_taxon_key, serde_json::to_string(animal)?, Utc::now().to_rfc3339()],
+    )?;
+    Ok(())
+}
+
+fn get_index_record(connection: &Connection, gbif_taxon_key: i64) -> Result<Option<IndexRecord>> {
+    connection
+        .query_row(
+            "
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            FROM species_index
+            WHERE gbif_taxon_key = ?1
+            ",
+            params![gbif_taxon_key],
+            row_to_record,
+        )
+        .optional()
+        .map_err(Into::into)
+}
+
+pub async fn get_or_hydrate_profile(app: Option<&AppHandle>, id: &str, force_refresh: bool) -> Result<SpeciesProfilePayload> {
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let gbif_taxon_key: i64 = id
+        .trim_start_matches("gbif-")
+        .parse()
+        .with_context(|| format!("invalid species id '{id}'"))?;
+
+    if !force_refresh {
+        if let Some(cached) = open_profile_cache(&connection, gbif_taxon_key)? {
+            return Ok(cached);
+        }
+    }
+
+    let record = get_index_record(&connection, gbif_taxon_key)?
+        .ok_or_else(|| anyhow!("species index entry {gbif_taxon_key} not found"))?;
+
+    let animal = match hydrate_species_record(&record).await {
+        Ok(animal) => animal,
+        Err(_) => json!({
+            "id": make_species_id(record.gbif_taxon_key),
+            "gbifTaxonKey": record.gbif_taxon_key,
+            "commonName": record.common_name.clone().unwrap_or_else(|| record.canonical_name.clone()),
+            "scientificName": record.scientific_name,
+            "averageLifespanYears": Value::Null,
+            "shortDescription": "This species record is not fully hydrated yet.",
+            "detailedDescription": "Biblos found the indexed species name locally, but upstream profile sources did not return a complete record yet.",
+            "coolFacts": [],
+            "classification": {
+                "kingdom": record.kingdom.clone().unwrap_or_else(|| "Animalia".into()),
+                "phylum": record.phylum.clone().unwrap_or_else(|| "Unknown".into()),
+                "className": record.class_name.clone().unwrap_or_else(|| "Unknown".into()),
+                "order": record.order_name.clone().unwrap_or_else(|| "Unknown".into()),
+                "family": record.family.clone().unwrap_or_else(|| "Unknown".into()),
+                "genus": record.genus.clone().unwrap_or_else(|| "Unknown".into()),
+                "species": record.canonical_name.clone()
+            },
+            "habitat": ["Unknown"],
+            "diet": "Unknown",
+            "activityPattern": "Unknown",
+            "continents": ["Unknown"],
+            "conservationStatus": "Unknown",
+            "size": {
+                "lengthCm": Value::Null,
+                "heightCm": Value::Null,
+                "wingspanCm": Value::Null
+            },
+            "weightKg": Value::Null,
+            "images": [],
+            "has3DModel": false,
+            "sourceUrls": ["https://www.gbif.org/"],
+            "lastFetchedAt": Utc::now().to_rfc3339(),
+            "partial": true
+        }),
+    };
+
+    save_profile(&connection, gbif_taxon_key, &animal)?;
+
+    Ok(SpeciesProfilePayload {
+        id: make_species_id(gbif_taxon_key),
+        gbif_taxon_key,
+        animal: animal.clone(),
+        cached: false,
+        partial: animal.get("partial").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+pub fn list_profiles_by_ids(app: Option<&AppHandle>, ids: &[String]) -> Result<Vec<Value>> {
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let mut animals = Vec::new();
+    for id in ids {
+        let gbif_taxon_key: i64 = match id.trim_start_matches("gbif-").parse() {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if let Some(cached) = open_profile_cache(&connection, gbif_taxon_key)? {
+            animals.push(cached.animal);
+        }
+    }
+    Ok(animals)
+}
