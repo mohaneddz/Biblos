@@ -35,13 +35,15 @@ export function AnimalCard({ animal, trailing }: AnimalCardProps) {
       </div>
       <div className="flex flex-1 flex-col gap-4 p-5">
         <p className="text-sm leading-7 text-app-muted">{animal.shortDescription}</p>
-        <div className="flex flex-wrap gap-2">
-          {animal.habitat.slice(0, 3).map((item) => (
-            <span key={item} className="tag-chip">
-              {item}
-            </span>
-          ))}
-        </div>
+        {animal.habitat.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {animal.habitat.slice(0, 3).map((item) => (
+              <span key={item} className="tag-chip">
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <dl className="grid grid-cols-2 gap-3 text-sm text-app-muted">
           <div>
             <dt className="text-app-soft">Diet</dt>

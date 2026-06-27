@@ -14,7 +14,12 @@ export function SpeciesImage({
   fitClassName = "h-full w-full object-cover",
   labelClassName = "text-sm text-app-text",
 }: SpeciesImageProps) {
+  const directImage = animal.heroImage ?? animal.images[0] ?? null;
   const { primaryImage, loading } = useSpeciesMedia(animal, "primary");
+
+  if (directImage) {
+    return <img src={directImage} alt={animal.commonName} className={fitClassName} />;
+  }
 
   if (primaryImage) {
     return <img src={primaryImage.thumbnailUrl ?? primaryImage.url} alt={primaryImage.alt} className={fitClassName} />;
