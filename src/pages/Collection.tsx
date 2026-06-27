@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimalCard } from "../components/AnimalCard";
 import { animalMap } from "../data/animals";
-import { getBookmarkedSpecies, getFavorites, getRecentlyViewedAnimals, toggleBookmark, toggleFavorite } from "../services/cache";
+import { getBookmarkedSpecies, getCachedSpecies, getFavorites, getRecentlyViewedAnimals, toggleBookmark, toggleFavorite } from "../services/cache";
 
 export default function Collection() {
   const [, setVersion] = useState(0);
-  const favoriteAnimals = getFavorites().map((id) => animalMap.get(id)).filter(Boolean);
-  const bookmarkedAnimals = getBookmarkedSpecies().map((id) => animalMap.get(id)).filter(Boolean);
+  const favoriteAnimals = getFavorites().map((id) => getCachedSpecies(id) ?? animalMap.get(id)).filter(Boolean);
+  const bookmarkedAnimals = getBookmarkedSpecies().map((id) => getCachedSpecies(id) ?? animalMap.get(id)).filter(Boolean);
   const recentlyViewed = getRecentlyViewedAnimals();
 
   function refresh() {

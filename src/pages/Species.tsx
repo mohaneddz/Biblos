@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimalCard } from "../components/AnimalCard";
 import { SearchBar } from "../components/SearchBar";
@@ -6,6 +6,7 @@ import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
 import { getBookmarkedSpecies, getFavorites, toggleBookmark, toggleFavorite } from "../services/cache";
 import { searchAnimals } from "../services/searchAnimals";
+import { previewAnimalFromHit, searchSpeciesLiveFallback, searchSpeciesLocal, type SpeciesSearchHit } from "../services/speciesStore";
 import type { Continent } from "../types/animal";
 
 function unique<T>(items: T[]) {
@@ -15,6 +16,9 @@ function unique<T>(items: T[]) {
 export default function Species() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [storageVersion, setStorageVersion] = useState(0);
+  const [indexedHits, setIndexedHits] = useState<SpeciesSearchHit[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [usedLiveFallback, setUsedLiveFallback] = useState(false);
 
   const favorites = useMemo(() => getFavorites(), [storageVersion]);
   const bookmarks = useMemo(() => getBookmarkedSpecies(), [storageVersion]);
@@ -29,7 +33,10 @@ export default function Species() {
     continent: (searchParams.get("continent") ?? "") as Continent | "",
   };
 
-  const results = useMemo(() => searchAnimals(animals, filters), [filters]);
+  const useIndexedSearch = filters.query.trim().length > 0;
+  const browseResults = useMemo(() => searchAnimals(animals, filters), [filters]);
+  const indexedResults = useMemo(() => indexedHits.map(previewAnimalFromHit), [indexedHits]);
+  const results = useIndexedSearch ? indexedResults : browseResults;
 
   const classes = unique(animals.map((animal) => animal.classification.className));
   const habitats = unique(animals.flatMap((animal) => animal.habitat));
@@ -56,6 +63,62 @@ export default function Species() {
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
+  useEffect(() => {
+    if (!useIndexedSearch) {
+      setIndexedHits([]);
+      setUsedLiveFallback(false);
+      setSearchLoading(false);
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setSearchLoading(true);
+
+      void searchSpeciesLocal(filters.query, 24)
+        .then((response) => {
+          if (!active) {
+            return;
+          }
+
+          setIndexedHits(response.hits);
+          setUsedLiveFallback(response.used_live_fallback);
+
+          const weakLocal = response.hits.length === 0 || (response.hits[0]?.score ?? 0) < 180;
+          if (!weakLocal) {
+            return;
+          }
+
+          void searchSpeciesLiveFallback(filters.query, 12).then((fallback) => {
+            if (!active || fallback.hits.length === 0) {
+              return;
+            }
+
+            setIndexedHits((current) => {
+              const merged = [...current];
+              for (const hit of fallback.hits) {
+                if (!merged.some((item) => item.id === hit.id)) {
+                  merged.push(hit);
+                }
+              }
+              return merged.slice(0, 24);
+            });
+            setUsedLiveFallback(fallback.used_live_fallback);
+          });
+        })
+        .finally(() => {
+          if (active) {
+            setSearchLoading(false);
+          }
+        });
+    }, 90);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [filters.query, useIndexedSearch]);
+
   return (
     <div className="page-frame">
       <section className="page-card rounded-[1.75rem] p-6">
@@ -76,6 +139,18 @@ export default function Species() {
         <div className="mt-5">
           <SearchBar value={filters.query} onChange={(value) => setFilter("q", value)} />
         </div>
+
+        {useIndexedSearch ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {indexedHits.slice(0, 6).map((hit) => (
+              <Link key={hit.id} to={`/species/${hit.id}`} className="tag-chip interactive-chip">
+                {hit.common_name ?? hit.canonical_name}
+              </Link>
+            ))}
+            {searchLoading ? <span className="tag-chip">Searching local index...</span> : null}
+            {usedLiveFallback ? <span className="tag-chip">Expanded with GBIF live fallback</span> : null}
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           {[
@@ -114,6 +189,7 @@ export default function Species() {
           <Link to="/atlas" className="ghost-button text-sm">
             Browse atlas regions
           </Link>
+          {useIndexedSearch ? <span className="text-sm text-app-soft">Typed search uses the local species index first, then hydrates records on open.</span> : null}
         </div>
       </section>
 
