@@ -1,0 +1,169 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked]
+"{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}"="OneDrive FileSyncEx"
+"{5F542218-AF8A-4CF8-8ACA-DF63B73C528D}"="Filmora Context Menu"
+"{A470F8CF-A1E8-4f65-8335-227475AA5C46}"="Encryption Menu"
+"{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}"="Sharing"
+"{596AB062-B4D2-4215-9F74-E9109B0A8153}"="Previous Versions"
+"{fbeb8a05-beee-4442-804e-409d6c4515e9}"="Unknown drive handler"
+"{D6791A63-E7E2-4fee-BF52-5DED8E86E9B8}"="Portable Devices Menu"
+"{e2bf9676-5f8f-435c-97eb-11607a5bedf7}"="Modern Sharing"
+"{F2E8B4A1-9C7D-4F6E-B3A5-8D2C1F4E9B7A}"="NVIDIA App desktop context"
+"{84D68575-E186-46AD-B0CB-BAEB45EE29C0}"="File Locksmith"
+"{FF90D477-E32A-4BE8-8CC5-A502A97F5401}"="New+"
+"{470C0EBD-5D73-4d58-9CED-E91E22E23282}"="PintoStartScreen"
+"{3dad6c5d-2167-4cae-9914-f99e41c12cfa}"="Library Location"
+
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\AutorunsDisabled]
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\AutorunsDisabled\FileLocksmithExt]
+@="{84D68575-E186-46AD-B0CB-BAEB45EE29C0}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\AutorunsDisabled\PowerRenameExt]
+@="{0440049F-D1DC-4E46-B27B-98393D79486B}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\CopyAsPathMenu]
+@="{f3d06e7c-1e45-4a26-847e-f9fcdee59be0}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\FileLocksmithExt]
+@="{84D68575-E186-46AD-B0CB-BAEB45EE29C0}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\ModernSharing]
+@="{e2bf9676-5f8f-435c-97eb-11607a5bedf7}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\PowerRenameExt]
+@="{0440049F-D1DC-4E46-B27B-98393D79486B}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\SendTo]
+@="{7BA4C740-9E81-11CF-99D3-00AA004AE837}"
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\{596AB062-B4D2-4215-9F74-E9109B0A8153}]
+
+[HKEY_CLASSES_ROOT\AllFilesystemObjects\shellex\ContextMenuHandlers\{a2a9545d-a0c2-42b4-9708-a0b2badd77c8}]
+@="Start Menu Pin"
+
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\ FileSyncEx]
+@="{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\7-Zip]
+@="{23170F69-40C1-278A-1000-000100020000}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\AutorunsDisabled]
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\AutorunsDisabled\ FileSyncEx]
+@="{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\AutorunsDisabled\AIMP]
+@="{1F77B17B-F531-44DB-ACA4-76ABB5010A28}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\EncryptionMenu]
+@="{A470F8CF-A1E8-4f65-8335-227475AA5C46}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\Kaspersky Free 21.25]
+@="{1B3F0359-9B15-4C5A-932F-C1E39B3EBE3D}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\Sharing]
+@="{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\WorkFolders]
+@="{E61BF828-5E63-4287-BEF1-60B1A4FDE0E3}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\{596AB062-B4D2-4215-9F74-E9109B0A8153}]
+
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\ FileSyncEx]
+@="{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\AutorunsDisabled]
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\AutorunsDisabled\NewPlusShellExtensionWin10]
+@="{FF90D477-E32A-4BE8-8CC5-A502A97F5401}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\New]
+@="{D969A300-E7FF-11d0-A93B-00A0C90F2719}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\NewPlusShellExtensionWin10]
+@="{FF90D477-E32A-4BE8-8CC5-A502A97F5401}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\NvAppDesktopContext]
+@="{F2E8B4A1-9C7D-4F6E-B3A5-8D2C1F4E9B7A}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\NvCplDesktopContext]
+@="{3D1975AF-48C6-4f8e-A182-BE0E08FA86A9}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\PowerRenameExt]
+@="{0440049F-D1DC-4E46-B27B-98393D79486B}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\Sharing]
+@="{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\WorkFolders]
+@="{E61BF828-5E63-4287-BEF1-60B1A4FDE0E3}"
+
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\AutorunsDisabled]
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\AutorunsDisabled\FileLocksmithExt]
+@="{84D68575-E186-46AD-B0CB-BAEB45EE29C0}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\EnhancedStorageShell]
+@="{2854F705-3548-414C-A113-93E27C808C85}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\FileLocksmithExt]
+@="{84D68575-E186-46AD-B0CB-BAEB45EE29C0}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\Kaspersky Free 21.25]
+@="{1B3F0359-9B15-4C5A-932F-C1E39B3EBE3D}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\Sharing]
+@="{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\{596AB062-B4D2-4215-9F74-E9109B0A8153}]
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\{D6791A63-E7E2-4fee-BF52-5DED8E86E9B8}]
+"{D6791A63-E7E2-4fee-BF52-5DED8E86E9B8}"="Portable Devices Menu"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\{fbeb8a05-beee-4442-804e-409d6c4515e9}]
+@=""
+
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers\7-Zip]
+@="{23170F69-40C1-278A-1000-000100020000}"
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers\Kaspersky Free 21.25]
+@="{1B3F0359-9B15-4C5A-932F-C1E39B3EBE3D}"
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers\Library Location]
+@="{3dad6c5d-2167-4cae-9914-f99e41c12cfa}"
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers\PintoStartScreen]
+@="{470C0EBD-5D73-4d58-9CED-E91E22E23282}"
+
+[HKEY_CLASSES_ROOT\Folder\shellex\ContextMenuHandlers\{a2a9545d-a0c2-42b4-9708-a0b2badd77c8}]
+@="Start Menu Pin"
+
+
+[HKEY_CLASSES_ROOT\CompressedFolder\ShellEx\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\CompressedFolder\ShellEx\ContextMenuHandlers\{b8cdcb65-b1bf-4b42-9428-1dfdb7ee92af}]
+@="Compressed (zipped) Folder Menu"
+
+
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.zip\shellex\ContextMenuHandlers]
+
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.zip\shellex\ContextMenuHandlers\{b8cdcb65-b1bf-4b42-9428-1dfdb7ee92af}]
+@="Compressed (zipped) Folder Menu"
+
