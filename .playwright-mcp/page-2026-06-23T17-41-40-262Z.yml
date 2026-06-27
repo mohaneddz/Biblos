@@ -1,0 +1,181 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - button "Minimize window" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+    - button "Maximize window" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+    - button "Close window" [ref=e10] [cursor=pointer]:
+      - img [ref=e11]
+  - generic [ref=e14]:
+    - complementary [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - generic [ref=e21]:
+            - paragraph [ref=e22]: Biblos
+            - paragraph [ref=e23]: Zoes
+        - generic [ref=e24]: Prototype data is generated and may not be scientifically accurate.
+        - navigation [ref=e25]:
+          - link "Home" [ref=e26] [cursor=pointer]:
+            - /url: "#/"
+            - img [ref=e27]
+            - generic [ref=e30]: Home
+          - link "Species" [ref=e31] [cursor=pointer]:
+            - /url: "#/species"
+            - img [ref=e32]
+            - generic [ref=e38]: Species
+          - link "Tree of Life" [ref=e39] [cursor=pointer]:
+            - /url: "#/tree"
+            - img [ref=e40]
+            - generic [ref=e50]: Tree of Life
+          - link "Explorer" [ref=e51] [cursor=pointer]:
+            - /url: "#/explorer"
+            - img [ref=e52]
+            - generic [ref=e55]: Explorer
+          - link "Ecosystems" [ref=e56] [cursor=pointer]:
+            - /url: "#/ecosystems"
+            - img [ref=e57]
+            - generic [ref=e61]: Ecosystems
+          - link "AI Naturalist" [ref=e62] [cursor=pointer]:
+            - /url: "#/ai"
+            - img [ref=e63]
+            - generic [ref=e65]: AI Naturalist
+          - link "Compare" [ref=e66] [cursor=pointer]:
+            - /url: "#/compare"
+            - img [ref=e67]
+            - generic [ref=e71]: Compare
+          - link "Atlas" [ref=e72] [cursor=pointer]:
+            - /url: "#/atlas"
+            - img [ref=e73]
+            - generic [ref=e75]: Atlas
+          - link "Collection" [ref=e76] [cursor=pointer]:
+            - /url: "#/collection"
+            - img [ref=e77]
+            - generic [ref=e80]: Collection
+          - link "Settings" [ref=e81] [cursor=pointer]:
+            - /url: "#/settings"
+            - img [ref=e82]
+            - generic [ref=e85]: Settings
+        - generic [ref=e86]:
+          - paragraph [ref=e87]: Local-first roadmap
+          - paragraph [ref=e88]: Local index first, live-source normalization later, AI formatting after caching.
+    - main [ref=e89]:
+      - generic [ref=e726]:
+        - generic [ref=e728]:
+          - generic [ref=e729]:
+            - img "African Lion" [ref=e730]
+            - generic [ref=e732]:
+              - paragraph [ref=e733]: Species Record
+              - heading "African Lion" [level=1] [ref=e734]
+              - paragraph [ref=e735]: Panthera leo
+          - generic [ref=e736]:
+            - generic [ref=e737]: Prototype data is generated and may not be scientifically accurate.
+            - generic [ref=e738]:
+              - generic [ref=e739]:
+                - generic [ref=e740]: Status
+                - strong [ref=e741]: Vulnerable
+              - generic [ref=e742]:
+                - generic [ref=e743]: Activity
+                - strong [ref=e744]: Cathemeral
+              - generic [ref=e745]:
+                - generic [ref=e746]: Diet
+                - strong [ref=e747]: Carnivore
+              - generic [ref=e748]:
+                - generic [ref=e749]: Continents
+                - strong [ref=e750]: Africa
+            - paragraph [ref=e751]: A social big cat that dominates grassland food webs across sub-Saharan Africa.
+        - generic [ref=e753]:
+          - button "Fetch / Refresh Live Data" [ref=e754] [cursor=pointer]
+          - link "Ask AI about this species" [ref=e755] [cursor=pointer]:
+            - /url: "#/ai?species=African%20Lion"
+          - button "Generate 3D Model" [disabled] [ref=e756]
+          - button "Add favorite" [ref=e757] [cursor=pointer]
+        - generic [ref=e758]:
+          - generic [ref=e759]:
+            - generic [ref=e760]: Average lifespan
+            - strong [ref=e761]: 14 years
+          - generic [ref=e762]:
+            - generic [ref=e763]: Weight
+            - strong [ref=e764]: 190 kg
+          - generic [ref=e765]:
+            - generic [ref=e766]: Length
+            - strong [ref=e767]: 250 cm
+          - generic [ref=e768]:
+            - generic [ref=e769]: Height
+            - strong [ref=e770]: 120 cm
+          - generic [ref=e771]:
+            - generic [ref=e772]: Wingspan
+            - strong [ref=e773]: N/A
+          - generic [ref=e774]:
+            - generic [ref=e775]: 3D model
+            - strong [ref=e776]: Not yet generated
+        - generic [ref=e777]:
+          - generic [ref=e778]:
+            - heading "Overview" [level=2] [ref=e779]
+            - paragraph [ref=e780]: African lions live in prides that coordinate hunting, territory defense, and cub care. Their populations are pressured by habitat fragmentation, prey decline, and conflict with livestock systems.
+            - generic [ref=e781]:
+              - generic [ref=e782]: Savannah
+              - generic [ref=e783]: Grassland
+              - generic [ref=e784]: Open Woodland
+          - generic [ref=e785]:
+            - heading "Classification" [level=2] [ref=e786]
+            - generic [ref=e787]:
+              - generic [ref=e788]:
+                - generic [ref=e789]: "1"
+                - generic [ref=e790]:
+                  - text: Kingdom
+                  - paragraph [ref=e791]: Animalia
+              - generic [ref=e792]:
+                - generic [ref=e793]: "2"
+                - generic [ref=e794]:
+                  - text: Phylum
+                  - paragraph [ref=e795]: Chordata
+              - generic [ref=e796]:
+                - generic [ref=e797]: "3"
+                - generic [ref=e798]:
+                  - text: Class
+                  - paragraph [ref=e799]: Mammalia
+              - generic [ref=e800]:
+                - generic [ref=e801]: "4"
+                - generic [ref=e802]:
+                  - text: Order
+                  - paragraph [ref=e803]: Carnivora
+              - generic [ref=e804]:
+                - generic [ref=e805]: "5"
+                - generic [ref=e806]:
+                  - text: Family
+                  - paragraph [ref=e807]: Felidae
+              - generic [ref=e808]:
+                - generic [ref=e809]: "6"
+                - generic [ref=e810]:
+                  - text: Genus
+                  - paragraph [ref=e811]: Panthera
+              - generic [ref=e812]:
+                - generic [ref=e813]: "7"
+                - generic [ref=e814]:
+                  - text: Species
+                  - paragraph [ref=e815]: leo
+        - generic [ref=e816]:
+          - generic [ref=e817]:
+            - heading "Cool Facts" [level=2] [ref=e818]
+            - list [ref=e819]:
+              - listitem [ref=e820]: Lions are the only truly social big cats.
+              - listitem [ref=e821]: A pride's roar can carry for several kilometers.
+              - listitem [ref=e822]: Females do most cooperative hunting in a pride.
+          - generic [ref=e823]:
+            - heading "Gallery Placeholders" [level=2] [ref=e824]
+            - generic [ref=e825]:
+              - generic [ref=e827]: Media slot 1
+              - generic [ref=e829]: Media slot 2
+              - generic [ref=e831]: Media slot 3
+              - generic [ref=e833]: Media slot 4
+        - generic [ref=e834]:
+          - heading "Source and Cache" [level=2] [ref=e835]
+          - generic [ref=e836]:
+            - generic [ref=e837]:
+              - generic [ref=e838]: Last fetched
+              - strong [ref=e839]: Not fetched yet
+            - generic [ref=e840]:
+              - generic [ref=e841]: Cache key
+              - strong [ref=e842]: biblos.species.african-lion
+          - paragraph [ref=e844]: The current live refresh is mocked. The architecture is prepared for future open-source integrations such as GBIF, Wikidata, EOL, iNaturalist, Wikimedia, and other API-based sources.

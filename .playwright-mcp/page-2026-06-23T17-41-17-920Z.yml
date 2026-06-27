@@ -1,0 +1,199 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - button "Minimize window" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+    - button "Maximize window" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+    - button "Close window" [ref=e10] [cursor=pointer]:
+      - img [ref=e11]
+  - generic [ref=e14]:
+    - complementary [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - generic [ref=e21]:
+            - paragraph [ref=e22]: Biblos
+            - paragraph [ref=e23]: Zoes
+        - generic [ref=e24]: Prototype data is generated and may not be scientifically accurate.
+        - navigation [ref=e25]:
+          - link "Home" [ref=e26] [cursor=pointer]:
+            - /url: "#/"
+            - img [ref=e27]
+            - generic [ref=e30]: Home
+          - link "Species" [ref=e31] [cursor=pointer]:
+            - /url: "#/species"
+            - img [ref=e32]
+            - generic [ref=e38]: Species
+          - link "Tree of Life" [ref=e39] [cursor=pointer]:
+            - /url: "#/tree"
+            - img [ref=e40]
+            - generic [ref=e50]: Tree of Life
+          - link "Explorer" [ref=e51] [cursor=pointer]:
+            - /url: "#/explorer"
+            - img [ref=e52]
+            - generic [ref=e55]: Explorer
+          - link "Ecosystems" [ref=e56] [cursor=pointer]:
+            - /url: "#/ecosystems"
+            - img [ref=e57]
+            - generic [ref=e61]: Ecosystems
+          - link "AI Naturalist" [ref=e62] [cursor=pointer]:
+            - /url: "#/ai"
+            - img [ref=e63]
+            - generic [ref=e65]: AI Naturalist
+          - link "Compare" [ref=e66] [cursor=pointer]:
+            - /url: "#/compare"
+            - img [ref=e67]
+            - generic [ref=e71]: Compare
+          - link "Atlas" [ref=e72] [cursor=pointer]:
+            - /url: "#/atlas"
+            - img [ref=e73]
+            - generic [ref=e75]: Atlas
+          - link "Collection" [ref=e76] [cursor=pointer]:
+            - /url: "#/collection"
+            - img [ref=e77]
+            - generic [ref=e80]: Collection
+          - link "Settings" [ref=e81] [cursor=pointer]:
+            - /url: "#/settings"
+            - img [ref=e82]
+            - generic [ref=e85]: Settings
+        - generic [ref=e86]:
+          - paragraph [ref=e87]: Local-first roadmap
+          - paragraph [ref=e88]: Local index first, live-source normalization later, AI formatting after caching.
+    - main [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e92]:
+          - paragraph [ref=e93]: Biblos Zoes
+          - heading "An AI-assisted encyclopedia of life." [level=1] [ref=e94]
+          - paragraph [ref=e95]: A local-first species directory, taxonomy explorer, and future AI naturalist workbench built to grow from mock data into a serious research prototype.
+          - generic [ref=e97]:
+            - generic [ref=e98]: Search
+            - textbox "Search" [ref=e99]:
+              - /placeholder: Search the prototype species index...
+          - generic [ref=e100]:
+            - button "Search directory" [ref=e101] [cursor=pointer]
+            - link "Open AI Naturalist" [ref=e102] [cursor=pointer]:
+              - /url: "#/ai"
+        - generic [ref=e103]:
+          - generic [ref=e104]:
+            - heading "Animal of the Day" [level=2] [ref=e105]
+            - img "Red Fox" [ref=e107]
+            - heading "Red Fox" [level=3] [ref=e108]
+            - paragraph [ref=e109]: Vulpes vulpes
+            - paragraph [ref=e110]: A small omnivorous canid known for its adaptability in wild and human-shaped landscapes.
+            - link "Open record" [ref=e111] [cursor=pointer]:
+              - /url: "#/species/red-fox"
+          - generic [ref=e112]:
+            - heading "Recently Viewed" [level=2] [ref=e113]
+            - paragraph [ref=e115]: Species you open will appear here so the collection layer can evolve into a proper local field journal.
+          - generic [ref=e116]:
+            - heading "Featured Ecosystems" [level=2] [ref=e117]
+            - generic [ref=e118]:
+              - link "African Savannah Open grasslands with scattered trees, seasonal rainfall, and large herbivore-predator networks." [ref=e119] [cursor=pointer]:
+                - /url: "#/ecosystems"
+                - paragraph [ref=e120]: African Savannah
+                - paragraph [ref=e121]: Open grasslands with scattered trees, seasonal rainfall, and large herbivore-predator networks.
+              - link "Amazon Rainforest Dense humid forest with layered canopy structure and extremely high biodiversity." [ref=e122] [cursor=pointer]:
+                - /url: "#/ecosystems"
+                - paragraph [ref=e123]: Amazon Rainforest
+                - paragraph [ref=e124]: Dense humid forest with layered canopy structure and extremely high biodiversity.
+              - link "Coral Reef Highly productive marine habitat built by corals and shaped by light-rich shallow seas." [ref=e125] [cursor=pointer]:
+                - /url: "#/ecosystems"
+                - paragraph [ref=e126]: Coral Reef
+                - paragraph [ref=e127]: Highly productive marine habitat built by corals and shaped by light-rich shallow seas.
+        - generic [ref=e128]:
+          - generic [ref=e130]:
+            - heading "Quick Actions" [level=2] [ref=e131]
+            - paragraph [ref=e132]: The MVP routes requested in the prompt are now wired as the core navigation surface.
+          - generic [ref=e133]:
+            - link "Tree of Life Open the taxonomy backbone and inspect life by branch." [ref=e134] [cursor=pointer]:
+              - /url: "#/tree"
+              - heading "Tree of Life" [level=3] [ref=e135]
+              - paragraph [ref=e136]: Open the taxonomy backbone and inspect life by branch.
+            - link "Explorer Browse by habitat, diet, activity pattern, and conservation." [ref=e137] [cursor=pointer]:
+              - /url: "#/explorer"
+              - heading "Explorer" [level=3] [ref=e138]
+              - paragraph [ref=e139]: Browse by habitat, diet, activity pattern, and conservation.
+            - link "AI Naturalist Ask local mock questions against the prototype encyclopedia." [ref=e140] [cursor=pointer]:
+              - /url: "#/ai"
+              - heading "AI Naturalist" [level=3] [ref=e141]
+              - paragraph [ref=e142]: Ask local mock questions against the prototype encyclopedia.
+            - link "Compare Place two species side by side and scan differences quickly." [ref=e143] [cursor=pointer]:
+              - /url: "#/compare"
+              - heading "Compare" [level=3] [ref=e144]
+              - paragraph [ref=e145]: Place two species side by side and scan differences quickly.
+            - link "Atlas Use continent cards to move through the library geographically." [ref=e146] [cursor=pointer]:
+              - /url: "#/atlas"
+              - heading "Atlas" [level=3] [ref=e147]
+              - paragraph [ref=e148]: Use continent cards to move through the library geographically.
+        - generic [ref=e149]:
+          - generic [ref=e150]:
+            - generic [ref=e151]:
+              - heading "Priority Species" [level=2] [ref=e152]
+              - paragraph [ref=e153]: A starter set of endangered and high-interest entries from the local mock index.
+            - link "View full directory" [ref=e154] [cursor=pointer]:
+              - /url: "#/species"
+          - generic [ref=e155]:
+            - article [ref=e156]:
+              - generic [ref=e157]:
+                - img "Bengal Tiger" [ref=e158]
+                - generic [ref=e160]: Endangered
+              - generic [ref=e161]:
+                - generic [ref=e162]:
+                  - heading "Bengal Tiger" [level=3] [ref=e163]
+                  - paragraph [ref=e164]: Panthera tigris tigris
+                - paragraph [ref=e165]: A powerful striped predator of forests, floodplains, and mangrove landscapes in Asia.
+                - generic [ref=e166]:
+                  - generic [ref=e167]: Rainforest
+                  - generic [ref=e168]: Wetland
+                  - generic [ref=e169]: Mangrove
+                - generic [ref=e170]:
+                  - generic [ref=e171]:
+                    - term [ref=e172]: Diet
+                    - definition [ref=e173]: Carnivore
+                  - generic [ref=e174]:
+                    - term [ref=e175]: Class
+                    - definition [ref=e176]: Mammalia
+                - link "Open entry" [ref=e178] [cursor=pointer]:
+                  - /url: "#/species/bengal-tiger"
+            - article [ref=e179]:
+              - generic [ref=e180]:
+                - img "Blue Whale" [ref=e181]
+                - generic [ref=e183]: Endangered
+              - generic [ref=e184]:
+                - generic [ref=e185]:
+                  - heading "Blue Whale" [level=3] [ref=e186]
+                  - paragraph [ref=e187]: Balaenoptera musculus
+                - paragraph [ref=e188]: The largest known animal, migrating through vast pelagic ocean routes to feed on krill.
+                - generic [ref=e189]:
+                  - generic [ref=e190]: Ocean
+                  - generic [ref=e191]: Open Sea
+                - generic [ref=e192]:
+                  - generic [ref=e193]:
+                    - term [ref=e194]: Diet
+                    - definition [ref=e195]: Carnivore
+                  - generic [ref=e196]:
+                    - term [ref=e197]: Class
+                    - definition [ref=e198]: Mammalia
+                - link "Open entry" [ref=e200] [cursor=pointer]:
+                  - /url: "#/species/blue-whale"
+            - article [ref=e201]:
+              - generic [ref=e202]:
+                - img "Red Panda" [ref=e203]
+                - generic [ref=e205]: Endangered
+              - generic [ref=e206]:
+                - generic [ref=e207]:
+                  - heading "Red Panda" [level=3] [ref=e208]
+                  - paragraph [ref=e209]: Ailurus fulgens
+                - paragraph [ref=e210]: A bamboo-feeding mammal of temperate mountain forests in the eastern Himalayas and China.
+                - generic [ref=e211]:
+                  - generic [ref=e212]: Mountain
+                  - generic [ref=e213]: Temperate Forest
+                - generic [ref=e214]:
+                  - generic [ref=e215]:
+                    - term [ref=e216]: Diet
+                    - definition [ref=e217]: Omnivore
+                  - generic [ref=e218]:
+                    - term [ref=e219]: Class
+                    - definition [ref=e220]: Mammalia
+                - link "Open entry" [ref=e222] [cursor=pointer]:
+                  - /url: "#/species/red-panda"
