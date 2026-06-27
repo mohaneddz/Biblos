@@ -2,7 +2,7 @@ import type { Animal } from "../types/animal";
 
 export function FactGrid({ animal }: { animal: Animal }) {
   const facts = [
-    ["Average lifespan", `${animal.averageLifespanYears} years`],
+    ["Average lifespan", animal.averageLifespanYears ? `${animal.averageLifespanYears} years` : "Unknown"],
     ["Weight", animal.weightKg ? `${animal.weightKg} kg` : "Unknown"],
     ["Length", animal.size.lengthCm ? `${animal.size.lengthCm} cm` : "Unknown"],
     ["Height", animal.size.heightCm ? `${animal.size.heightCm} cm` : "Unknown"],

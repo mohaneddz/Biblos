@@ -6,14 +6,14 @@ import { SpeciesHero } from "../components/SpeciesHero";
 import { useSpeciesMedia } from "../hooks/useSpeciesMedia";
 import { animalMap } from "../data/animals";
 import { getFavorites, getBookmarkedSpecies, getCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite } from "../services/cache";
-import { fetchLiveSpeciesData } from "../services/liveSpeciesData";
+import { hydrateSpeciesProfile } from "../services/speciesStore";
 import type { Animal } from "../types/animal";
 
 export default function SpeciesDetail() {
   const { id = "" } = useParams();
   const baseAnimal = animalMap.get(id);
   const [animal, setAnimal] = useState<Animal | null>(() => getCachedSpecies(id) ?? baseAnimal ?? null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !baseAnimal && id.startsWith("gbif-"));
   const [favorites, setFavorites] = useState(() => getFavorites());
   const [bookmarks, setBookmarks] = useState(() => getBookmarkedSpecies());
   const { gallery } = useSpeciesMedia(animal, "full");
@@ -25,9 +25,56 @@ export default function SpeciesDetail() {
     const cached = getCachedSpecies(id);
     setAnimal(cached ?? animalMap.get(id) ?? null);
     pushRecentlyViewed(id);
+
+    if (cached || animalMap.has(id)) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    void hydrateSpeciesProfile(id)
+      .then((result) => {
+        if (!active) {
+          return;
+        }
+        setAnimal(result.animal);
+        setCachedSpecies(result.animal);
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   const lastFetched = useMemo(() => (animal?.lastFetchedAt ? new Date(animal.lastFetchedAt).toLocaleString() : "Local record only"), [animal?.lastFetchedAt]);
+
+  async function refreshHydratedProfile(forceRefresh = false) {
+    setLoading(true);
+    try {
+      const next = await hydrateSpeciesProfile(id, forceRefresh);
+      setAnimal(next.animal);
+      setCachedSpecies(next.animal);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading && !animal) {
+    return (
+      <div className="page-frame">
+        <section className="page-card rounded-[1.75rem] p-6">
+          <h1 className="page-title">Hydrating species record</h1>
+          <p className="page-lede">Biblos found the indexed species entry and is now assembling taxonomy, images, and readable facts from cached and live sources.</p>
+        </section>
+      </div>
+    );
+  }
 
   if (!animal) {
     return (
@@ -45,25 +92,14 @@ export default function SpeciesDetail() {
 
   const currentAnimal = animal;
 
-  async function refreshLiveData() {
-    setLoading(true);
-    try {
-      const next = await fetchLiveSpeciesData(currentAnimal);
-      setAnimal(next);
-      setCachedSpecies(next);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="page-frame">
       <SpeciesHero animal={animal} />
 
       <section className="page-card rounded-[1.75rem] p-6">
         <div className="flex flex-wrap gap-3">
-          <button type="button" className="primary-button" onClick={() => void refreshLiveData()} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh local enriched record"}
+          <button type="button" className="primary-button" onClick={() => void refreshHydratedProfile(true)} disabled={loading}>
+            {loading ? "Refreshing..." : "Refresh cached profile"}
           </button>
           <Link to={`/ai?species=${encodeURIComponent(animal.commonName)}`} className="ghost-button">
             Ask AI about this species
@@ -77,6 +113,7 @@ export default function SpeciesDetail() {
           <button type="button" className="ghost-button" onClick={() => setBookmarks(toggleBookmark(animal.id))}>
             {bookmarks.includes(animal.id) ? "Remove bookmark" : "Add bookmark"}
           </button>
+          {currentAnimal.partial ? <span className="tag-chip">Partial profile</span> : null}
         </div>
       </section>
 

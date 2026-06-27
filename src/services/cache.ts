@@ -39,6 +39,10 @@ function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function resolveAnimal(id: string) {
+  return getCachedSpecies(id) ?? animalMap.get(id) ?? null;
+}
+
 export function getFavorites() {
   return readJson<string[]>(FAVORITES_KEY, []);
 }
@@ -73,7 +77,7 @@ export function pushRecentlyViewed(id: string) {
 
 export function getRecentlyViewedAnimals() {
   return getRecentlyViewedIds()
-    .map((id) => animalMap.get(id))
+    .map((id) => resolveAnimal(id))
     .filter((animal): animal is Animal => Boolean(animal));
 }
 
