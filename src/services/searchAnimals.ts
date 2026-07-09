@@ -11,7 +11,12 @@ export type AnimalSearchFilters = {
 };
 
 function normalize(value: string) {
-  return value.toLowerCase().trim();
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function animalHaystack(animal: Animal) {
@@ -33,7 +38,11 @@ function animalHaystack(animal: Animal) {
     animal.coolFacts.join(" "),
   ]
     .join(" ")
-    .toLowerCase();
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function scoreAnimal(animal: Animal, query: string) {
