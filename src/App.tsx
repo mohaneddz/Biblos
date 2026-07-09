@@ -1,8 +1,9 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import Titlebar from "./components/Titlebar";
+import { ToastContainer } from "./components/ToastContainer";
+import { ConfirmModal } from "./components/ConfirmModal";
 import AiNaturalist from "./pages/AiNaturalist";
-import Atlas from "./pages/Atlas";
 import Collection from "./pages/Collection";
 import Compare from "./pages/Compare";
 import Ecosystems from "./pages/Ecosystems";
@@ -23,6 +24,8 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+      <ToastContainer />
+      <ConfirmModal />
     </div>
   );
 }
@@ -39,7 +42,7 @@ export default function App() {
         <Route path="/ecosystems" element={<Ecosystems />} />
         <Route path="/ai" element={<AiNaturalist />} />
         <Route path="/compare" element={<Compare />} />
-        <Route path="/atlas" element={<Atlas />} />
+        <Route path="/atlas" element={<Navigate to="/explorer" replace />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
