@@ -1,39 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { animalMap, animals } from "../data/animals";
+import { getCachedSpecies } from "./cache";
 import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../types/animal";
+import type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse } from "../types/speciesStore";
+import { getSpeciesSuggestionsFromAI, hydrateSpeciesWithAI } from "./aiSpeciesService";
+import {
+  fetchGbifSearch,
+  fetchGbifMatch,
+  fetchGbifSpeciesDetails,
+  buildSpeciesFromGbifDetails,
+  normalizeSearchText,
+  dedupeSearchHits,
+} from "./gbifService";
+import { reportError } from "./errorReporter";
 
-export type SpeciesSearchHit = {
-  id: string;
-  gbif_taxon_key: number;
-  scientific_name: string;
-  canonical_name: string;
-  common_name: string | null;
-  rank: string;
-  kingdom: string | null;
-  phylum: string | null;
-  class_name: string | null;
-  order_name: string | null;
-  family: string | null;
-  genus: string | null;
-  source: string;
-  updated_at: string;
-  score: number;
-  match_reason: string;
-  is_live_fallback: boolean;
-};
-
-type SearchResponse = {
-  hits: SpeciesSearchHit[];
-  used_live_fallback: boolean;
-};
-
-type HydratedProfileResponse = {
-  id: string;
-  gbif_taxon_key: number;
-  animal: Animal;
-  cached: boolean;
-  partial: boolean;
-};
+// Re-export types for backward compatibility
+export type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse };
+export { hydrateSpeciesWithAI };
 
 let initialization: Promise<string> | null = null;
 
@@ -72,9 +55,9 @@ function asContinents(values: string[] | undefined): Continent[] {
 }
 
 function mockSearch(query: string) {
-  const q = query.trim().toLowerCase();
+  const q = normalizeSearchText(query);
   const hits = animals
-    .filter((animal) => !q || `${animal.commonName} ${animal.scientificName}`.toLowerCase().includes(q))
+    .filter((animal) => !q || normalizeSearchText(`${animal.commonName} ${animal.scientificName}`).includes(q))
     .slice(0, 24)
     .map<SpeciesSearchHit>((animal, index) => ({
       id: animal.id,
@@ -135,7 +118,10 @@ export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
 
 export async function initializeSpeciesStore() {
   if (!initialization) {
-    initialization = invoke<string>("initialize_species_store").catch(() => "mock");
+    initialization = invoke<string>("initialize_species_store").catch((err) => {
+      reportError("Failed to initialize backend species store", err);
+      return "mock";
+    });
   }
   return initialization;
 }
@@ -144,8 +130,13 @@ export async function searchSpeciesLocal(query: string, limit = 24) {
   await initializeSpeciesStore();
 
   try {
-    return await invoke<SearchResponse>("search_species_local", { query, limit });
-  } catch {
+    const response = await invoke<SearchResponse>("search_species_local", { query, limit });
+    return {
+      ...response,
+      hits: dedupeSearchHits(response.hits, query).slice(0, limit),
+    };
+  } catch (err) {
+    reportError(`Local species search failed for query "${query}"`, err);
     return mockSearch(query);
   }
 }
@@ -154,9 +145,47 @@ export async function searchSpeciesLiveFallback(query: string, limit = 12) {
   await initializeSpeciesStore();
 
   try {
-    return await invoke<SearchResponse>("search_species_live_fallback", { query, limit });
-  } catch {
-    return mockSearch(query);
+    const response = await invoke<SearchResponse>("search_species_live_fallback", { query, limit });
+    return {
+      ...response,
+      hits: dedupeSearchHits(response.hits, query).slice(0, limit),
+    };
+  } catch (err) {
+    reportError(`Live fallback search failed for query "${query}", querying GBIF directly`, err);
+    return fetchGbifSearch(query, limit).catch(() => mockSearch(query));
+  }
+}
+
+export async function lookupSpeciesAndStore(query: string, limit = 50) {
+  await initializeSpeciesStore();
+
+  try {
+    const aiSuggestionsPromise = getSpeciesSuggestionsFromAI(query);
+    const localLookupPromise = invoke<SearchResponse>("lookup_species_and_store", { query, limit }).catch((err) => {
+      reportError(`Backend species lookup & storage failed for query "${query}"`, err);
+      return { hits: [], used_live_fallback: false } as SearchResponse;
+    });
+
+    const [aiSuggestions, localLookup] = await Promise.all([aiSuggestionsPromise, localLookupPromise]);
+
+    const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName));
+    const aiHits = (await Promise.all(aiHitsPromises)).filter((h): h is SpeciesSearchHit => Boolean(h));
+
+    const combinedHits = [...aiHits, ...localLookup.hits];
+    const deduped = {
+      ...localLookup,
+      hits: dedupeSearchHits(combinedHits, query).slice(0, limit),
+    };
+
+    if (deduped.hits.length > 0) {
+      return deduped;
+    }
+    const fallback = await fetchGbifSearch(query, limit).catch(() => deduped);
+    return fallback;
+  } catch (err) {
+    reportError(`Species lookup failed for query "${query}", running fallback search`, err);
+    const fallback = await fetchGbifSearch(query, limit).catch(() => mockSearch(query));
+    return fallback;
   }
 }
 
@@ -179,18 +208,43 @@ export async function hydrateSpeciesProfile(id: string, forceRefresh = false) {
       id,
       forceRefresh,
     });
-  } catch {
+  } catch (err) {
+    // Expected for GBIF species — the Tauri backend doesn't store arbitrary GBIF IDs.
+    // The fallback path below handles this gracefully via direct GBIF API calls.
+    console.debug(`[species-store] Backend hydration unavailable for "${id}", using GBIF fallback`, err);
     const fallback = animalMap.get(id);
     if (!fallback) {
-      throw new Error(`Unable to hydrate species ${id}`);
+      if (id.startsWith("gbif-")) {
+        const taxonKey = Number(id.replace(/^gbif-/, ""));
+        if (Number.isFinite(taxonKey) && taxonKey > 0) {
+          const cached = getCachedSpecies(id);
+          const details = await fetchGbifSpeciesDetails(taxonKey);
+          response = {
+            id,
+            gbif_taxon_key: taxonKey,
+            animal: buildSpeciesFromGbifDetails(id, details, cached),
+            cached: Boolean(cached),
+            partial: true,
+          };
+        } else {
+          const err = new Error(`Invalid taxon key for species ${id}`);
+          reportError(`Unable to hydrate species profile for ID "${id}"`, err);
+          throw err;
+        }
+      } else {
+        const err = new Error(`Unable to hydrate species ${id}`);
+        reportError(`Unable to hydrate species profile for ID "${id}"`, err);
+        throw err;
+      }
+    } else {
+      response = {
+        id,
+        gbif_taxon_key: fallback.gbifTaxonKey ?? 0,
+        animal: fallback,
+        cached: true,
+        partial: false,
+      };
     }
-    response = {
-      id,
-      gbif_taxon_key: fallback.gbifTaxonKey ?? 0,
-      animal: fallback,
-      cached: true,
-      partial: false,
-    };
   }
 
   return {
@@ -217,7 +271,8 @@ export async function getCachedSpeciesProfiles(ids: string[]) {
 
   try {
     return await invoke<Animal[]>("get_cached_species_profiles", { ids });
-  } catch {
+  } catch (err) {
+    reportError(`Failed to fetch cached species profiles for multiple IDs`, err);
     return ids
       .map((id) => animalMap.get(id))
       .filter((animal): animal is Animal => Boolean(animal));
