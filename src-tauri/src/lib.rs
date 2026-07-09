@@ -1,6 +1,30 @@
 mod species_store;
 
 use species_store::{SearchResponse, SpeciesProfilePayload};
+use reqwest::Client;
+use serde::Deserialize;
+use serde_json::json;
+
+#[derive(Debug, Clone, Deserialize)]
+struct AiNaturalistMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GroqChatResponse {
+    choices: Vec<GroqChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GroqChoice {
+    message: GroqMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct GroqMessage {
+    content: Option<String>,
+}
 
 #[tauri::command]
 async fn initialize_species_store(app: tauri::AppHandle) -> Result<String, String> {
@@ -37,6 +61,17 @@ async fn search_species_live_fallback(
 }
 
 #[tauri::command]
+async fn lookup_species_and_store(
+    app: tauri::AppHandle,
+    query: String,
+    limit: Option<usize>,
+) -> Result<SearchResponse, String> {
+    species_store::lookup_and_store_species(Some(&app), &query, limit.unwrap_or(50))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn hydrate_species_profile(
     app: tauri::AppHandle,
     id: String,
@@ -52,6 +87,73 @@ async fn get_cached_species_profiles(app: tauri::AppHandle, ids: Vec<String>) ->
     species_store::list_profiles_by_ids(Some(&app), &ids).map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn ask_ai_naturalist(
+    question: String,
+    history: Vec<AiNaturalistMessage>,
+    context: String,
+    groq_api_key: Option<String>,
+    model: Option<String>,
+) -> Result<String, String> {
+    dotenvy::dotenv().ok();
+    let api_key = groq_api_key
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| std::env::var("GROQ_API_KEY").ok())
+        .ok_or_else(|| "No Groq API key is configured. Add one in Settings or .env.".to_string())?;
+
+    let mut messages = vec![json!({
+        "role": "system",
+        "content": "You are Biblos AI Naturalist. Use the supplied retrieval context first, but do not stop there if the context is incomplete. Fill missing details with careful general knowledge from the model when needed, and clearly label anything inferred, estimated, or uncertain. Be concise, helpful, and concrete. If the user asks for taxonomy, biome fit, comparisons, or conservation, ground the answer in the provided records and then bridge gaps with best-effort reasoning."
+    })];
+
+    if !context.trim().is_empty() {
+        messages.push(json!({
+            "role": "system",
+            "content": format!("Retrieved Biblos context:\n{}", context)
+        }));
+    }
+
+    for entry in history.into_iter().rev().take(6).collect::<Vec<_>>().into_iter().rev() {
+        messages.push(json!({
+            "role": entry.role,
+            "content": entry.content,
+        }));
+    }
+
+    messages.push(json!({
+        "role": "user",
+        "content": question,
+    }));
+
+    let response = Client::builder()
+        .user_agent("Biblos/0.1")
+        .build()
+        .map_err(|error| error.to_string())?
+        .post("https://api.groq.com/openai/v1/chat/completions")
+        .bearer_auth(api_key)
+        .json(&json!({
+            "model": model.unwrap_or_else(|| "llama-3.3-70b-versatile".to_string()),
+            "temperature": 0.2,
+            "messages": messages,
+        }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_else(|_| "Unknown error body".to_string());
+        return Err(format!("Groq request failed with status {}: {}", status, err_body));
+    }
+
+    let payload: GroqChatResponse = response.json().await.map_err(|error| error.to_string())?;
+    payload
+        .choices
+        .first()
+        .and_then(|choice| choice.message.content.clone())
+        .ok_or_else(|| "Groq returned an empty response.".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -64,8 +166,10 @@ pub fn run() {
             seed_species_store,
             search_species_local,
             search_species_live_fallback,
+            lookup_species_and_store,
             hydrate_species_profile,
-            get_cached_species_profiles
+            get_cached_species_profiles,
+            ask_ai_naturalist
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

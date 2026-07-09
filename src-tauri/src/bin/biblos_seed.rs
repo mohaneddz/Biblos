@@ -1,4 +1,5 @@
 #[path = "../species_store.rs"]
+#[allow(dead_code)]
 mod species_store;
 
 #[tokio::main]
