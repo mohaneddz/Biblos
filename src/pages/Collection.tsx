@@ -2,23 +2,40 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimalCard } from "../components/AnimalCard";
 import { animalMap } from "../data/animals";
-import { getBookmarkedSpecies, getCachedSpecies, getFavorites, getRecentlyViewedAnimals, toggleBookmark, toggleFavorite } from "../services/cache";
+import { getBookmarkedSpecies, getCachedSpecies, getFavorites, getRecentlyViewedAnimals, getHiddenSpecies } from "../services/cache";
+import { useEffect } from "react";
+import type { Animal } from "../types/animal";
 
 export default function Collection() {
   const [, setVersion] = useState(0);
-  const favoriteAnimals = getFavorites().map((id) => getCachedSpecies(id) ?? animalMap.get(id)).filter(Boolean);
-  const bookmarkedAnimals = getBookmarkedSpecies().map((id) => getCachedSpecies(id) ?? animalMap.get(id)).filter(Boolean);
-  const recentlyViewed = getRecentlyViewedAnimals();
+  
+  useEffect(() => {
+    const handler = () => setVersion((v) => v + 1);
+    window.addEventListener("biblos-cache-updated", handler);
+    return () => window.removeEventListener("biblos-cache-updated", handler);
+  }, []);
 
-  function refresh() {
-    setVersion((value) => value + 1);
-  }
+  const hidden = getHiddenSpecies();
+  const favoriteAnimals = getFavorites()
+    .filter((id) => !hidden.includes(id))
+    .map((id) => getCachedSpecies(id) ?? animalMap.get(id))
+    .filter((a): a is Animal => Boolean(a));
+
+  const bookmarkedAnimals = getBookmarkedSpecies()
+    .filter((id) => !hidden.includes(id))
+    .map((id) => getCachedSpecies(id) ?? animalMap.get(id))
+    .filter((a): a is Animal => Boolean(a));
+
+  const recentlyViewed = getRecentlyViewedAnimals()
+    .filter((animal) => !hidden.includes(animal.id));
+
+
   return (
     <div className="page-frame">
       <section className="page-card rounded-[1.75rem] p-6">
         <h1 className="page-title">Collection</h1>
         <p className="page-lede">
-          Collection is the saved-state layer for the local MVP. Favorites mark recurring records, bookmarks hold research targets, and recents preserve your current trail through the atlas.
+          Collection is the saved-state layer for the local MVP. Favorites mark recurring records, bookmarks hold research targets, and recents preserve your current trail through explorer, species, and ecosystem views.
         </p>
       </section>
 
@@ -36,18 +53,6 @@ export default function Collection() {
                 <AnimalCard
                   key={animal.id}
                   animal={animal}
-                  trailing={
-                    <button
-                      type="button"
-                      className="tag-chip interactive-chip"
-                      onClick={() => {
-                        toggleFavorite(animal.id);
-                        refresh();
-                      }}
-                    >
-                      Remove
-                    </button>
-                  }
                 />
               ) : null
             ))}
@@ -71,18 +76,6 @@ export default function Collection() {
                 <AnimalCard
                   key={animal.id}
                   animal={animal}
-                  trailing={
-                    <button
-                      type="button"
-                      className="tag-chip interactive-chip"
-                      onClick={() => {
-                        toggleBookmark(animal.id);
-                        refresh();
-                      }}
-                    >
-                      Remove
-                    </button>
-                  }
                 />
               ) : null
             ))}
