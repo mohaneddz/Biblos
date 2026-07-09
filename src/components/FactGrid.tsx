@@ -1,21 +1,31 @@
 import type { Animal } from "../types/animal";
+import { HourglassIcon, ScaleIcon, RulerIcon, BoxIcon } from "./icons";
 
 export function FactGrid({ animal }: { animal: Animal }) {
   const facts = [
-    ["Average lifespan", animal.averageLifespanYears ? `${animal.averageLifespanYears} years` : "Unknown"],
-    ["Weight", animal.weightKg ? `${animal.weightKg} kg` : "Unknown"],
-    ["Length", animal.size.lengthCm ? `${animal.size.lengthCm} cm` : "Unknown"],
-    ["Height", animal.size.heightCm ? `${animal.size.heightCm} cm` : "Unknown"],
-    ["Wingspan", animal.size.wingspanCm ? `${animal.size.wingspanCm} cm` : "N/A"],
-    ["3D model", animal.has3DModel ? "Available locally" : "No local model attached"],
+    { label: "Average lifespan", value: animal.averageLifespanYears ? `${animal.averageLifespanYears} years` : "Unknown", icon: HourglassIcon, isAi: true },
+    { label: "Weight", value: animal.weightKg ? `${animal.weightKg} kg` : "Unknown", icon: ScaleIcon, isAi: true },
+    { label: "Length", value: animal.size.lengthCm ? `${animal.size.lengthCm} cm` : "Unknown", icon: RulerIcon, isAi: true },
+    { label: "Height", value: animal.size.heightCm ? `${animal.size.heightCm} cm` : "Unknown", icon: RulerIcon, isAi: true },
+    { label: "Wingspan", value: animal.size.wingspanCm ? `${animal.size.wingspanCm} cm` : "N/A", icon: RulerIcon, isAi: true },
+    { label: "3D model", value: animal.has3DModel ? "Available locally" : "No local model attached", icon: BoxIcon, isAi: false },
   ];
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {facts.map(([label, value]) => (
-        <div key={label} className="stat-tile min-h-[6.5rem]">
-          <span className="stat-label">{label}</span>
-          <strong>{value}</strong>
+      {facts.map(({ label, value, icon: Icon, isAi }) => (
+        <div key={label} className="stat-tile min-h-[6.5rem] relative p-5">
+          <div className="absolute right-4 top-4 text-app-soft/60">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div>
+            <span className="stat-label">{label}</span>
+            {animal.partial && isAi ? (
+              <div className="h-6 w-20 bg-white/5 animate-pulse rounded mt-2" />
+            ) : (
+              <strong className="block mt-2 text-lg text-white font-semibold">{value}</strong>
+            )}
+          </div>
         </div>
       ))}
     </div>
