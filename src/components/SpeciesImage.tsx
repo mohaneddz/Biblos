@@ -27,7 +27,8 @@ export function SpeciesImage({
 
   return (
     <div className={`${className} placeholder-media flex items-end p-4`}>
-      <span className={labelClassName}>{loading ? "Resolving image..." : animal.commonName}</span>
+      {loading ? <span className={labelClassName}>Resolving image...</span> : null}
     </div>
   );
+
 }

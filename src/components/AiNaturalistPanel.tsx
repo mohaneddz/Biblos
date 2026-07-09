@@ -1,145 +1,267 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { askNaturalist } from "../services/aiNaturalist";
+import { getSettings } from "../services/cache";
+import { BinocularsIcon, BrainSparkIcon, DatabaseIcon, GlobeGridIcon, LeafClusterIcon } from "./icons";
 import { animals } from "../data/animals";
+import type { Animal } from "../types/animal";
 
 const promptChips = [
-  "Tell me about the African lion",
-  "Which endangered species live in Asia?",
-  "Show nocturnal mammals",
-  "Compare dolphin and whale habitats",
-  "What species live in wetlands?",
+  "Compare the African lion and cheetah as savanna predators.",
+  "Which endangered species in Biblos are tied to wetlands or estuaries?",
+  "Explain where the giant Pacific octopus sits in the tree of life.",
+  "Which biomes in Biblos fit the bottlenose dolphin best?",
+  "Show me mountain species and explain how their habitats differ.",
 ];
 
-function normalize(value: string) {
-  return value.toLowerCase().trim();
-}
+type ChatEntry = {
+  role: "user" | "assistant";
+  content: string;
+  refs?: Array<{ id: string; title: string; kind: string; excerpt: string }>;
+};
 
-function findMentionedAnimals(prompt: string) {
-  const query = normalize(prompt);
-  return animals.filter((animal) => query.includes(normalize(animal.commonName)) || query.includes(normalize(animal.scientificName)));
-}
-
-function answerPrompt(prompt: string) {
-  const query = normalize(prompt);
-  const mentioned = findMentionedAnimals(prompt);
-
-  if (mentioned.length === 1 && (query.startsWith("tell me about") || query.includes("about "))) {
-    const animal = mentioned[0];
-    return `${animal.commonName}: ${animal.shortDescription} It is a ${animal.diet.toLowerCase()} ${animal.classification.className.toLowerCase()} active primarily during ${animal.activityPattern.toLowerCase()} periods. Habitats: ${animal.habitat.join(", ")}. Conservation status: ${animal.conservationStatus}.`;
-  }
-
-  if (query.includes("endangered") && query.includes("asia")) {
-    const results = animals.filter((animal) => animal.continents.includes("Asia") && (animal.conservationStatus === "Endangered" || animal.conservationStatus === "Critically Endangered"));
-    return results.length > 0
-      ? `Endangered or critically endangered species in Asia from the local index: ${results.map((animal) => animal.commonName).join(", ")}.`
-      : "No endangered Asian species are currently in the local index.";
-  }
-
-  if (query.includes("nocturnal mammals")) {
-    const results = animals.filter((animal) => animal.activityPattern === "Nocturnal" && animal.classification.className === "Mammalia");
-    return results.length > 0
-      ? `Nocturnal mammals in the local directory: ${results.map((animal) => animal.commonName).join(", ")}.`
-      : "No nocturnal mammals are currently listed.";
-  }
-
-  if (query.includes("wetland")) {
-    const results = animals.filter((animal) => animal.habitat.includes("Wetland"));
-    return results.length > 0
-      ? `Wetland-linked records include ${results.map((animal) => animal.commonName).join(", ")}.`
-      : "No wetland-linked species are currently listed.";
-  }
-
-  if ((query.includes("compare") || query.includes("difference")) && mentioned.length >= 2) {
-    const [left, right] = mentioned;
-    return `${left.commonName} vs ${right.commonName}: ${left.commonName} is a ${left.classification.className.toLowerCase()} associated with ${left.habitat.join(", ")}, while ${right.commonName} is a ${right.classification.className.toLowerCase()} associated with ${right.habitat.join(", ")}. Their conservation statuses are ${left.conservationStatus} and ${right.conservationStatus}.`;
-  }
-
-  if (mentioned.length === 1) {
-    const animal = mentioned[0];
-    return `${animal.commonName}: ${animal.shortDescription} Status: ${animal.conservationStatus}. Continents: ${animal.continents.join(", ")}.`;
-  }
-
-  if (query.includes("classif")) {
-    const animal = mentioned[0] ?? animals.find((entry) => query.includes(normalize(entry.commonName)));
-    if (!animal) {
-      return "Name the species you want classified and I will answer from the local taxonomy fields.";
-    }
-
-    return `${animal.commonName} classification: ${animal.classification.kingdom} > ${animal.classification.phylum} > ${animal.classification.className} > ${animal.classification.order} > ${animal.classification.family} > ${animal.classification.genus} > ${animal.classification.species}.`;
-  }
-
-  if (query.includes("habitat") || query.includes("where")) {
-    const habitatMatches = animals.filter((animal) => animal.habitat.some((habitat) => query.includes(normalize(habitat))));
-    if (habitatMatches.length > 0) {
-      return `Matching habitat records: ${habitatMatches.map((animal) => animal.commonName).join(", ")}.`;
-    }
-  }
-
-  return "I can answer from the local Biblos dataset about species identity, habitats, activity patterns, continents, conservation status, and straightforward comparisons. Try naming a species, a biome, a continent, or a behavior.";
-}
-
-export function AiNaturalistPanel({ initialPrompt = "" }: { initialPrompt?: string }) {
+export function AiNaturalistPanel({
+  initialPrompt = "",
+  speciesName = "",
+}: {
+  initialPrompt?: string;
+  speciesName?: string;
+}) {
+  const settings = useMemo(() => getSettings(), []);
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [history, setHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>(
-    initialPrompt
-      ? [
-          { role: "user", content: initialPrompt },
-          { role: "assistant", content: answerPrompt(initialPrompt) },
-        ]
-      : [],
-  );
+  const [history, setHistory] = useState<ChatEntry[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  const suggested = useMemo(() => promptChips, []);
+  const matchedAnimal = useMemo(() => {
+    if (!speciesName) return null;
+    const cleanName = speciesName.trim().toLowerCase();
+    
+    // Check local animals first
+    const local = animals.find(
+      (a) =>
+        a.commonName.toLowerCase() === cleanName ||
+        a.id.toLowerCase() === cleanName ||
+        a.scientificName.toLowerCase() === cleanName
+    );
+    if (local) return local;
 
-  function submit(nextPrompt: string) {
+    // Check localStorage cache
+    if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith("biblos.species.")) {
+          try {
+            const cached = JSON.parse(window.localStorage.getItem(key) || "") as Animal;
+            if (
+              cached &&
+              (cached.commonName.toLowerCase() === cleanName ||
+                cached.id.toLowerCase() === cleanName ||
+                cached.scientificName.toLowerCase() === cleanName)
+            ) {
+              return cached;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+    return null;
+  }, [speciesName]);
+
+  const matchedAnimalContext = useMemo(() => {
+    if (!matchedAnimal) return "";
+    return [
+      `[SPECIES] Species: ${matchedAnimal.commonName} (${matchedAnimal.scientificName})`,
+      `Taxonomy: ${matchedAnimal.classification.kingdom} > ${matchedAnimal.classification.phylum} > ${matchedAnimal.classification.className} > ${matchedAnimal.classification.order} > ${matchedAnimal.classification.family} > ${matchedAnimal.classification.genus} > ${matchedAnimal.classification.species}`,
+      `Summary: ${matchedAnimal.shortDescription}`,
+      `Detail: ${matchedAnimal.detailedDescription}`,
+      `Habitats: ${matchedAnimal.habitat.join(", ")}`,
+      `Diet: ${matchedAnimal.diet}`,
+      `Activity: ${matchedAnimal.activityPattern}`,
+      `Continents: ${matchedAnimal.continents.join(", ")}`,
+      `Conservation: ${matchedAnimal.conservationStatus}`,
+      `Facts: ${matchedAnimal.coolFacts.join(" ")}`,
+    ].join("\n");
+  }, [matchedAnimal]);
+
+  async function submit(nextPrompt: string) {
     const clean = nextPrompt.trim();
-    if (!clean) {
+    if (!clean || busy) {
       return;
     }
 
-    setHistory((current) => [
-      ...current,
-      { role: "user", content: clean },
-      { role: "assistant", content: answerPrompt(clean) },
-    ]);
-    setPrompt("");
+    setBusy(true);
+    setError("");
+    setHistory((current) => [...current, { role: "user", content: clean }]);
+
+    try {
+      const response = await askNaturalist({
+        question: clean,
+        history: history.map(({ role, content }) => ({ role, content })),
+        apiKey: settings.groqApiKey,
+        model: settings.aiModel,
+        extraContext: matchedAnimalContext,
+      });
+
+      setHistory((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content: response.answer,
+          refs: response.contextHits.map((hit) => ({
+            id: hit.id,
+            title: hit.title,
+            kind: hit.kind,
+            excerpt: hit.excerpt,
+          })),
+        },
+      ]);
+      setPrompt("");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to reach AI Naturalist.");
+    } finally {
+      setBusy(false);
+    }
   }
 
+  useEffect(() => {
+    if (!initialPrompt) {
+      return;
+    }
+    if (history.length > 0) {
+      return;
+    }
+    void submit(initialPrompt);
+  }, [history.length, initialPrompt]);
+
   return (
-    <section className="page-card rounded-[1.75rem] p-5 md:p-6">
-      <div className="warning-banner mb-5">
-        AI Naturalist answers only from local Biblos records in this MVP. Use it for fast synthesis, then open the related species pages for the full entry.
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {suggested.map((chip) => (
-          <button key={chip} type="button" className="tag-chip text-left transition hover:border-app-accent/35 hover:text-app-text" onClick={() => submit(chip)}>
-            {chip}
-          </button>
-        ))}
-      </div>
-      <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-black/15 p-4">
-        <div className="grid gap-4">
-          {history.length === 0 ? (
-            <p className="text-sm leading-7 text-app-muted">Ask about an animal, continent, habitat, behavior, or comparison.</p>
-          ) : (
-            history.map((entry, index) => (
-              <div key={`${entry.role}-${index}`} className={entry.role === "assistant" ? "rounded-2xl border border-app-accent/12 bg-app-accent/6 p-4" : "rounded-2xl border border-white/6 bg-white/[0.03] p-4"}>
-                <span className="text-xs uppercase tracking-[0.18em] text-app-soft">{entry.role}</span>
-                <p className="mt-2 text-sm leading-7 text-app-text">{entry.content}</p>
+    <section className="page-card rounded-[1.8rem] p-5 md:p-6">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(19rem,0.9fr)]">
+        <div>
+          <div className="rounded-[1.4rem] border border-app-accent/18 bg-app-accent/7 px-4 py-4 text-sm leading-7 text-app-muted">
+            AI Naturalist now runs through Groq with a simple local retrieval pass over species records, ecosystem notes, and taxonomy nodes before each answer.
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {promptChips.map((chip) => (
+              <button key={chip} type="button" className="interactive-card rounded-[1.2rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left text-sm text-app-text" onClick={() => void submit(chip)}>
+                {chip}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-black/15 p-4">
+            <div className="grid gap-4">
+              {history.length === 0 ? (
+                <p className="text-sm leading-7 text-app-muted">Ask for comparisons, taxonomy placement, biome fit, conservation context, or species summaries grounded in the local Biblos corpus.</p>
+              ) : (
+                history.map((entry, index) => (
+                  <div key={`${entry.role}-${index}`} className={entry.role === "assistant" ? "rounded-[1.35rem] border border-app-accent/12 bg-app-accent/6 p-4" : "rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4"}>
+                    <span className="text-xs uppercase tracking-[0.18em] text-app-soft">{entry.role === "assistant" ? "AI Naturalist" : "You"}</span>
+                    <p className="mt-2 text-sm leading-7 text-app-text">{entry.content}</p>
+                    {entry.refs && entry.refs.length > 0 ? (
+                      <div className="mt-4 grid gap-2">
+                        {entry.refs.slice(0, 4).map((ref) => (
+                          <div key={ref.id} className="rounded-[1rem] border border-white/7 bg-black/18 px-3 py-3 text-sm">
+                            <div className="flex items-center gap-2 text-app-accent">
+                              {ref.kind === "species" ? <BinocularsIcon className="h-4 w-4" /> : ref.kind === "biome" ? <LeafClusterIcon className="h-4 w-4" /> : <GlobeGridIcon className="h-4 w-4" />}
+                              <span className="uppercase tracking-[0.18em] text-[0.68rem]">{ref.kind}</span>
+                            </div>
+                            <p className="mt-2 text-app-text">{ref.title}</p>
+                            <p className="mt-1 text-app-muted">{ref.excerpt}</p>
+                            {ref.kind === "species" ? (
+                              <Link to={`/species/${ref.id}`} className="mt-3 inline-flex text-app-accent hover:text-app-accent-strong">
+                                Open species
+                              </Link>
+                            ) : ref.kind === "biome" ? (
+                              <Link to={`/explorer?ecosystem=${ref.id}`} className="mt-3 inline-flex text-app-accent hover:text-app-accent-strong">
+                                Open biome
+                              </Link>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Ask about an animal, a branch of the tree, a biome, or a comparison..."
+                className="min-h-32 rounded-[1.2rem] border border-white/8 bg-black/25 px-4 py-4 text-app-text placeholder:text-app-muted"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className="primary-button" onClick={() => void submit(prompt)} disabled={busy || prompt.trim().length === 0}>
+                  {busy ? "Asking Groq..." : "Ask Naturalist"}
+                </button>
+                {error ? <span className="text-sm text-[#f4b7a1]">{error}</span> : null}
               </div>
-            ))
+            </div>
+          </div>
+        </div>
+
+        <aside className="grid gap-3">
+          {matchedAnimal && (
+            <div className="rounded-[1.4rem] border border-app-accent/35 bg-app-accent/9 p-4">
+              <div className="flex items-center gap-3 text-app-accent">
+                <BinocularsIcon className="h-5 w-5" />
+                <span className="text-xs uppercase tracking-[0.24em] font-semibold">Active Species Focus</span>
+              </div>
+              <p className="mt-3 text-lg font-semibold text-white">{matchedAnimal.commonName}</p>
+              <p className="text-sm italic text-app-muted">{matchedAnimal.scientificName}</p>
+              
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-app-soft">
+                <div>
+                  <span className="block font-medium">Status</span>
+                  <span className="text-app-text">{matchedAnimal.conservationStatus}</span>
+                </div>
+                <div>
+                  <span className="block font-medium">Diet</span>
+                  <span className="text-app-text">{matchedAnimal.diet}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-app-muted line-clamp-3">
+                {matchedAnimal.shortDescription}
+              </p>
+              <Link to={`/species/${matchedAnimal.id}`} className="mt-3 inline-flex items-center text-xs text-app-accent hover:underline">
+                View full record &rarr;
+              </Link>
+            </div>
           )}
-        </div>
-        <div className="mt-5 flex flex-col gap-3 md:flex-row">
-          <input
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Ask about an animal, biome, continent, or comparison..."
-            className="min-h-12 flex-1 rounded-[1.1rem] border border-white/8 bg-black/25 px-4 text-app-text placeholder:text-app-muted"
-          />
-          <button type="button" className="primary-button" onClick={() => submit(prompt)}>
-            Ask Naturalist
-          </button>
-        </div>
+          <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4">
+            <div className="flex items-center gap-3 text-app-accent">
+              <BrainSparkIcon className="h-5 w-5" />
+              <span className="text-xs uppercase tracking-[0.24em]">Model</span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-white">{settings.aiModel}</p>
+            <p className="mt-2 text-sm leading-6 text-app-muted">The response pass happens in Tauri, so the key does not need to live in the browser bundle.</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4">
+            <div className="flex items-center gap-3 text-app-accent">
+              <DatabaseIcon className="h-5 w-5" />
+              <span className="text-xs uppercase tracking-[0.24em]">Retrieval</span>
+            </div>
+            <p className="mt-3 text-sm leading-7 text-app-muted">The retriever scores species records, biome briefs, and taxonomy nodes, then injects the top local context into the Groq prompt.</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4">
+            <div className="flex items-center gap-3 text-app-accent">
+              <BinocularsIcon className="h-5 w-5" />
+              <span className="text-xs uppercase tracking-[0.24em]">Best Queries</span>
+            </div>
+            <ul className="mt-3 grid gap-2 text-sm leading-6 text-app-muted">
+              <li>Compare two species in one habitat.</li>
+              <li>Ask where a species belongs in the taxonomy tree.</li>
+              <li>Ask which Biblos biomes fit a species.</li>
+              <li>Ask for endangered, nocturnal, marine, or mountain subsets.</li>
+            </ul>
+          </div>
+        </aside>
       </div>
     </section>
   );

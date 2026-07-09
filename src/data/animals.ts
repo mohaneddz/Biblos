@@ -8,7 +8,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 14,
     shortDescription: "A social big cat that dominates grassland food webs across sub-Saharan Africa.",
     detailedDescription:
-      "African lions live in prides that coordinate hunting, territory defense, and cub care. Their populations are pressured by habitat fragmentation, prey decline, and conflict with livestock systems.",
+      "The African lion (Panthera leo) is a powerful, social big cat that lives in family groups called prides, consisting of related females, their offspring, and a small coalition of males. Prides coordinate hunting and territory defense across grasslands and savannahs, where lions act as apex predators regulating herbivore populations. Unlike other felids, they exhibit a high degree of cooperative behavior, sharing cub-rearing duties and collaborating to bring down large prey like wildebeests, zebras, and buffaloes. Their distinctive golden coats provide excellent camouflage in dry grass, while the males' dark, majestic manes signal health and maturity to potential mates and rivals. Today, lion populations face a severe and ongoing decline due to habitat fragmentation, human-wildlife conflict as agricultural lands expand, and the depletion of their natural prey base.",
     coolFacts: [
       "Lions are the only truly social big cats.",
       "A pride's roar can carry for several kilometers.",
@@ -40,7 +40,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 15,
     shortDescription: "A powerful striped predator of forests, floodplains, and mangrove landscapes in Asia.",
     detailedDescription:
-      "Bengal tigers are solitary ambush hunters that rely on stealth, cover, and large territories. Their survival depends on intact habitat corridors and healthy prey populations.",
+      "The Bengal tiger (Panthera tigris tigris) is a magnificent, solitary apex predator native to the Indian subcontinent, where it inhabits rainforests, dry forests, grasslands, and mangrove swamps like the Sundarbans. Utilizing their unique, individually distinct camouflage stripes, they stalk and ambush large ungulates such as chital, sambar deer, and wild boar. Tigers are highly territorial animals, marking huge home ranges with scent, scratches, and vocalizations to ward off competitors. Remarkably strong swimmers, they frequently bathe in rivers to cool down and are known to pursue prey through deep waters. Bengal tigers face severe threats from poaching driven by the illegal traditional medicine trade, rapid habitat destruction, and fragmentation of critical migratory corridors, making conservation efforts like protected tiger reserves absolutely vital.",
     coolFacts: [
       "Tiger stripe patterns are unique to each individual.",
       "Bengal tigers are strong swimmers.",
@@ -72,7 +72,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 10,
     shortDescription: "A highly adaptable social canid found across forests, tundra, mountains, and grasslands.",
     detailedDescription:
-      "Gray wolves organize into packs with complex social behavior and coordinated hunting strategies. They shape ecosystems by regulating prey movement and abundance.",
+      "The gray wolf (Canis lupus) is a highly intelligent, social carnivore that hunts in structured packs, typically composed of an alpha breeding pair and their multi-generational offspring. Wolves exhibit complex communication systems including iconic howling, body language, and scent marking to coordinate long-distance movements, express social bonds, and defend vast territories across forest, tundra, and mountainous biomes. As crucial keystone predators and ecosystem engineers, wolves regulate wild ungulate herds, preventing overbrowsing of vegetation and indirectly supporting diverse communities of birds, insects, and scavengers. Despite their ecological importance, wolves have historically faced intense persecution from humans, though modern conservation initiatives and reintroduction programs are slowly helping to restore their historic ranges.",
     coolFacts: [
       "Wolf howls help packs coordinate over long distances.",
       "Pack hierarchies are often family based.",
@@ -104,7 +104,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 5,
     shortDescription: "A small omnivorous canid known for its adaptability in wild and human-shaped landscapes.",
     detailedDescription:
-      "Red foxes occupy an enormous geographic range and exploit diverse food sources, from rodents and insects to fruit. Their flexible behavior helps them thrive in fragmented environments.",
+      "The red fox (Vulpes vulpes) is a small, opportunistic omnivore renowned for its extraordinary intelligence and adaptability, thriving across a vast array of biomes including forests, grasslands, deserts, tundra, and even densely populated urban environments. They possess acute senses, particularly hearing, which allows them to detect the low-frequency rustling of small rodents under deep snow before pouncing with characteristic acrobatic precision. Red foxes are solitary hunters but maintain loose family structures during the breeding season, raising their kits in underground dens. Their successful expansion across the Northern Hemisphere and introduction to other continents is a testament to their resourcefulness, varied diet of fruits, insects, and small vertebrates, and resilient nature in human-dominated landscapes.",
     coolFacts: [
       "Foxes use Earth's magnetic field when pouncing on prey.",
       "Their tails help with balance and winter insulation.",
@@ -136,7 +136,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 15,
     shortDescription: "A mountain predator built for cold, steep terrain across Central and South Asia.",
     detailedDescription:
-      "Snow leopards occupy rugged alpine habitats where camouflage, balance, and explosive power support ambush hunting. They remain elusive and difficult to survey reliably.",
+      "The snow leopard (Panthera uncia) is a large, solitary cat specially adapted to the harsh, freezing climates of the rugged mountain ranges of Central and South Asia. Their thick, smoky-gray fur pattern provides near-perfect camouflage among rocky cliffs, while their exceptionally long, muscular tails assist with balance on steep slopes and wrap around their bodies for warmth during sleep. Wide, fur-covered paws act as natural snowshoes, distributing their weight evenly on soft snow. Snow leopards are highly elusive, hunting wild mountain sheep and goats like ibex and blue sheep. Climate change warming their alpine habitats, depletion of natural prey, and retaliatory killings by pastoralist herders pose continuous challenges to their survival in the wild.",
     coolFacts: [
       "Its tail can be nearly as long as its body.",
       "Snow leopards cannot roar like lions or tigers.",
@@ -168,7 +168,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 20,
     shortDescription: "A large fish-eating raptor associated with lakes, rivers, and coastal habitats.",
     detailedDescription:
-      "Bald eagles build massive nests and rely heavily on aquatic food webs. Recovery efforts demonstrated how regulation and habitat protection can reverse major declines.",
+      "The bald eagle (Haliaeetus leucocephalus) is a large diurnal raptor native to North America, widely recognized for its snow-white head and tail, dark brown body, and powerful yellow beak and talons. They construct massive stick nests, known as aeries, which are the largest tree nests of any North American bird, often rebuilt and expanded over decades until they weigh over a ton. They are typically found near large bodies of open water, such as lakes, rivers, and coastal areas, where fish make up the majority of their diet, though they are also opportunistic scavengers and skilled hunters of waterfowl. Historically devastated by pesticide pollution (specifically DDT) which thinned their eggshells, the bald eagle's dramatic recovery following legislative protection and conservation action is celebrated as one of the greatest triumphs in modern environmental history.",
     coolFacts: [
       "Some nests weigh over a ton after repeated reuse.",
       "Juveniles lack the classic white head and tail.",
@@ -200,7 +200,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 15,
     shortDescription: "A high-speed aerial predator that nests on cliffs, skyscrapers, and open landscapes worldwide.",
     detailedDescription:
-      "Peregrine falcons specialize in catching birds mid-flight with high-velocity stoops. Their global range reflects extraordinary ecological flexibility.",
+      "The peregrine falcon (Falco peregrinus) is a globally distributed bird of prey celebrated as the fastest animal on Earth, capable of reaching speeds exceeding 320 km/h (200 mph) during its high-velocity hunting dive, known as a stoop. This specialized hunting technique involves soaring high above prey—typically other birds like pigeons and ducks—and striking them mid-air with clenched talons. Peregrines possess unique biological adaptations to survive these extreme speeds, including specialized nostrils that channel high-pressure air away from their lungs and protective third eyelids. They nest on high cliff faces, but have adapted remarkably well to urban areas, using skyscrapers and suspension bridges as artificial cliffs to hunt and raise their young.",
     coolFacts: [
       "It is among the fastest animals on Earth during a dive.",
       "Urban towers can substitute for natural cliff habitat.",
@@ -232,7 +232,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 4,
     shortDescription: "A large intelligent mollusk inhabiting cold coastal waters and rocky seafloor shelters.",
     detailedDescription:
-      "This octopus uses camouflage, problem solving, and dexterous arms to hunt crustaceans, fish, and mollusks. It is a flagship example of advanced invertebrate cognition.",
+      "The giant Pacific octopus (Enteroctopus dofleini) is the largest and longest-lived octopus species, inhabiting the cold, oxygen-rich waters of the North Pacific. They are highly intelligent, solitary predators that utilize an array of sophisticated hunting techniques, camouflage, venom, and muscular suckers to capture crabs, clams, shrimp, and occasionally small sharks. Their brains are highly developed, with two-thirds of their neurons located in their flexible arms, allowing each arm to explore and make decisions independently. They are famous for their ability to change color and skin texture in milliseconds to blend into rocky reefs or squeeze through openings barely larger than their hard beaks. Their lifespan is brief and terminal, ending after a single spawning event where females guard their eggs tirelessly without eating.",
     coolFacts: [
       "Each arm has extensive local neural control.",
       "They can squeeze through openings smaller than their body width.",
@@ -264,7 +264,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 80,
     shortDescription: "The largest known animal, migrating through vast pelagic ocean routes to feed on krill.",
     detailedDescription:
-      "Blue whales are baleen filter feeders whose size depends on energy-rich seasonal feeding grounds. Ship strikes, noise, and entanglement remain important conservation pressures.",
+      "The blue whale (Balaenoptera musculus) is the largest animal ever known to have lived on Earth, reaching lengths of up to 30 meters and weights exceeding 140 tonnes. These gentle giants migrate vast distances between polar feeding grounds, where they consume tonnes of tiny, shrimp-like krill daily, and tropical waters, where they mate and give birth to calves. They belong to the baleen whale group, using massive fringed plates to filter krill from engulfed seawater. Blue whales communicate across entire ocean basins using low-frequency, deep vocalizations that are among the loudest sounds produced by any animal. Although protected globally since the mid-20th century, their populations remain low and vulnerable to ship strikes, ocean noise pollution, and climate change affecting krill distribution.",
     coolFacts: [
       "Its heart can weigh as much as a small vehicle engine.",
       "Blue whale calls travel enormous ocean distances.",
@@ -296,7 +296,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 30,
     shortDescription: "A social marine mammal known for echolocation, play behavior, and complex group dynamics.",
     detailedDescription:
-      "Bottlenose dolphins inhabit coastal and offshore waters, communicating with whistles and clicks while coordinating on foraging and travel. They are widely used in cognition research.",
+      "The common bottlenose dolphin (Tursiops truncatus) is a highly social, intelligent marine mammal that lives in complex, cooperative groups called pods. They navigate and hunt using a sophisticated biological sonar system called echolocation, emitting high-frequency clicks and interpreting the returning echoes to detect prey, predators, and underwater structures. Dolphins exhibit remarkable cognitive abilities, cultural behaviors, and tool use, such as using marine sponges to protect their snouts while foraging on the seafloor. They communicate through a diverse repertoire of whistles, clicks, and body language, and each dolphin develops a unique \"signature whistle\" that serves as an individual name. Local populations face threats from commercial fishing gear entanglement, chemical pollution, and noise disturbance.",
     coolFacts: [
       "Dolphins recognize signature whistles of individuals.",
       "They use echolocation to perceive prey and surroundings.",
@@ -328,7 +328,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 12,
     shortDescription: "A bamboo-feeding mammal of temperate mountain forests in the eastern Himalayas and China.",
     detailedDescription:
-      "Red pandas spend much of their time in trees, using dense tail fur for warmth and balance. Habitat fragmentation threatens already patchy populations.",
+      "The red panda (Ailurus fulgens) is a small, arboreal mammal endemic to the high-altitude, temperate forests of the Himalayas and southwestern China. They feed almost exclusively on bamboo, utilizing a specialized radial sesamoid bone in their wrists that functions as a \"false thumb\" to grip stems while stripping leaves. Their thick, reddish-brown fur provides excellent camouflage against red moss and white lichens growing on fir trees, and their bushy, ringed tails provide balance on narrow branches and act as warm blankets during freezing winters. Red pandas are solitary, nocturnal, and crepuscular, spending most of their lives in the tree canopy. Severe habitat loss, forest fragmentation, and illegal poaching have caused their wild populations to decline, placing them on the endangered list.",
     coolFacts: [
       "Red pandas have a false thumb that helps grip bamboo.",
       "They are most active during cooler hours.",
@@ -360,7 +360,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 30,
     shortDescription: "The largest living lizard, endemic to a handful of Indonesian islands.",
     detailedDescription:
-      "Komodo dragons are ambush predators and scavengers with serrated teeth, powerful limbs, and a venom-assisted hunting strategy. Their restricted range makes them vulnerable to environmental change.",
+      "The Komodo dragon (Varanus komodoensis) is the largest living species of lizard, endemic to a handful of volcanic islands in the Indonesian archipelago. As apex predators, they dominate their island ecosystems, hunting large prey such as deer, pigs, water buffalo, and even smaller dragons by ambush. They possess serrated teeth and a highly specialized venom system that prevents blood clotting, causing their prey to go into shock and bleed out. Their long, yellow, deeply forked tongues are used to sample the air, detecting carrion from distances up to 9 kilometers away. Despite their prehistoric size and dominance, they are highly vulnerable to extinction due to rising sea levels, human encroachment on their restricted habitats, and natural disasters.",
     coolFacts: [
       "Juveniles spend more time in trees than adults.",
       "They can detect carrion from long distances.",
@@ -392,7 +392,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 70,
     shortDescription: "A long-distance migratory marine reptile that feeds in seagrass beds and coastal shallows.",
     detailedDescription:
-      "Green sea turtles use nesting beaches and nearshore feeding grounds separated by large migrations. They are affected by fisheries bycatch, habitat loss, and plastic pollution.",
+      "The green sea turtle (Chelonia mydas) is a large, migratory marine reptile that travels thousands of miles across open oceans between feeding grounds and nesting beaches. Uniquely among sea turtles, adults are primarily herbivorous, grazing on seagrasses and algae, which maintains the health of marine pastures and helps sequester carbon. They play a vital role in marine ecosystems by transporting nutrients between the ocean and sandy beaches where they lay their eggs. Green sea turtles face severe anthropogenic threats, including plastic pollution (which they mistake for jellyfish), coastal development destroying nesting dunes, warming temperatures skewing hatchling sex ratios, and accidental capture in commercial fishing nets.",
     coolFacts: [
       "Adults shift toward a more herbivorous diet.",
       "Females often return near their natal beaches to nest.",
@@ -424,7 +424,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 8,
     shortDescription: "A brightly colored amphibian associated with humid tropical forests of Central and South America.",
     detailedDescription:
-      "Poison dart frogs are best known for vivid warning coloration and chemical defenses acquired through diet. Many species depend on stable, moist microhabitats.",
+      "The poison dart frog (Dendrobatidae) comprises a diverse family of small, brilliantly colored amphibians native to the humid tropical rainforests of Central and South America. Their bright, conspicuous coloration is a classic example of aposematism, warning potential predators of their extremely toxic skin secretions, which contain alkaloid poisons that can cause paralysis or death. In the wild, they accumulate these toxins from their diet of specialized insects like toxic ants, beetles, and mites; captive-bred frogs fed on standard fruit flies lose their toxicity. Poison dart frogs exhibit remarkable parental care, with some species carrying newly hatched tadpoles on their backs to water-filled bromeliads high in the forest canopy and feeding them unfertilized eggs.",
     coolFacts: [
       "Captive diet changes can reduce toxin levels in some species.",
       "Bright colors warn predators of chemical defenses.",
@@ -456,7 +456,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 20,
     shortDescription: "The tallest penguin species, adapted to Antarctic sea ice and extreme cold.",
     detailedDescription:
-      "Emperor penguins breed during the Antarctic winter, balancing long fasting periods with cooperative huddling behavior. Their life cycle is tied tightly to sea ice stability.",
+      "The emperor penguin (Aptenodytes forsteri) is the tallest and heaviest of all living penguin species, uniquely adapted to survive the extreme, freezing conditions of the Antarctic winter. They are famous for their remarkable breeding cycle, which begins during the onset of the brutal polar winter. Females lay a single egg and immediately return to the sea to forage, leaving the males to incubate the egg on top of their feet, covered by a warm brood pouch, for over two months. To survive freezing winds reaching 200 km/h, huddles of hundreds of males rotate position constantly to share warmth. Emperor penguins are superb divers, reaching depths of over 500 meters to hunt fish, krill, and squid. They are highly sensitive to changes in sea ice stability caused by global warming.",
     coolFacts: [
       "Males incubate eggs on their feet through winter storms.",
       "Dense plumage and fat layers protect against severe cold.",
@@ -488,7 +488,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 60,
     shortDescription: "A keystone herbivore that engineers habitats across savannah and woodland ecosystems.",
     detailedDescription:
-      "African elephants shape vegetation, open travel corridors, and disperse seeds over long distances. Poaching and habitat pressure continue to affect populations unevenly.",
+      "The African elephant (Loxodonta africana) is the largest living land mammal on Earth, serving as a vital keystone species that engineers entire ecosystems. By knocking down trees, clearing pathways, dispersing seeds through their dung, and digging dry-season waterholes, they create habitats and resources that thousands of other species depend on. They live in highly structured, matriarchal family groups led by the oldest female, possessing deep social bonds, empathy, and long-term memory. Their trunks are incredibly versatile organs, containing over 40,000 muscles, used for breathing, smelling, drinking, communicating, and grasping objects with pinpoint precision. They face severe threats from poaching for the illegal ivory trade and habitat fragmentation due to human expansion.",
     coolFacts: [
       "Elephants communicate using low-frequency rumbles.",
       "Their trunks combine strength and fine motor control.",
@@ -520,7 +520,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 25,
     shortDescription: "A towering browsing mammal specialized for feeding on leaves high above most herbivores.",
     detailedDescription:
-      "Giraffes use extreme height and prehensile tongues to exploit tree canopies in savannah systems. They also face pressure from habitat conversion and localized population declines.",
+      "The giraffe (Giraffa camelopardalis) is the tallest land mammal, uniquely specialized to browse on foliage high in the tree canopy of savannahs and open woodlands. Their long necks, which contain the same number of cervical vertebrae as humans, and prehensile, 45-centimeter-long bluish-black tongues allow them to carefully strip leaves from thorny acacia branches without injury. To pump blood up to their brains, giraffes possess a massive, powerful heart weighing up to 11 kilograms and a specialized pressure-regulation system in their necks to prevent blackouts when bending down to drink. Despite their towering stature and peaceful nature, they are experiencing a silent extinction crisis, with wild populations declining due to habitat loss, poaching, and civil unrest.",
     coolFacts: [
       "Giraffe tongues are dark and prehensile.",
       "Necking behavior can establish social rank among males.",
@@ -552,7 +552,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 12,
     shortDescription: "A lightly built cat optimized for rapid acceleration and pursuit across open terrain.",
     detailedDescription:
-      "Cheetahs rely on speed, visibility, and maneuverability more than raw strength. Genetic bottlenecks and fragmented ranges complicate long-term resilience.",
+      "The cheetah (Acinonyx jubatus) is a slender, aerodynamic big cat built for unparalleled speed and acceleration, reaching velocities up to 100 km/h in just a few seconds. Their physical adaptations are highly specialized for pursuit, including non-retractable claws that act like running cleats, large nasal passages for oxygen intake, a flexible spine that extends their stride, and a heavy, flat tail that acts as a rudder during high-speed turns. Unlike most big cats, they are diurnal hunters, scanning the open savannah for gazelles and impalas. However, their extreme specialization for speed comes at the cost of physical strength; they are frequently bullied out of their kills by larger predators like lions and hyenas. They suffer from very low genetic diversity and habitat encroachment.",
     coolFacts: [
       "Cheetah claws are less retractable than those of many cats.",
       "They use black tear marks to reduce glare.",
@@ -584,7 +584,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 8,
     shortDescription: "The world's largest rodent, strongly associated with water-rich grasslands and wetlands.",
     detailedDescription:
-      "Capybaras live in groups and depend on access to water for escape, resting, and thermoregulation. Their calm behavior makes them common ambassadors for wetland ecology.",
+      "The capybara (Hydrochoerus hydrochaeris) is the world's largest living rodent, a semi-aquatic mammal native to the wetlands, marshes, and riverbanks of South America. They are highly social animals, living in stable groups of 10 to 30 individuals, communicating through a complex array of barks, whistles, purrs, and squeaks. Capybaras are superb swimmers, with partially webbed feet, and can remain fully submerged for up to five minutes to escape predators like jaguars, anacondas, and caimans. Their eyes, ears, and nostrils are positioned high on their heads, allowing them to stay mostly submerged while keeping watch. They are herbivorous, feeding on grasses and aquatic plants, and play a crucial role in managing vegetation along river corridors.",
     coolFacts: [
       "Capybaras can stay submerged for several minutes.",
       "They communicate using whistles, barks, and purrs.",
@@ -616,7 +616,7 @@ export const animals: Animal[] = [
     averageLifespanYears: 12,
     shortDescription: "A neotenic salamander famous for retaining larval features and remarkable regenerative abilities.",
     detailedDescription:
-      "Wild axolotls survive in highly threatened freshwater habitats near Mexico City. They have become globally recognized in research and conservation outreach.",
+      "The axolotl (Ambystoma mexicanum) is a critically endangered salamander native exclusively to the ancient lake complex of Xochimilco near Mexico City. Unlike other amphibians, they exhibit neoteny, meaning they retain their larval features—such as external feathery gills and an aquatic lifestyle—into adulthood without undergoing metamorphosis. Axolotls are globally famous in scientific research for their mind-boggling regenerative abilities; they can perfectly regrow amputated limbs, tail structures, spinal cords, heart tissue, and even parts of their brain without any scarring. In the wild, they are on the brink of extinction due to the urbanization of Mexico City, severe water pollution, and the introduction of non-native predatory fish like tilapia.",
     coolFacts: [
       "Axolotls can regenerate limbs and portions of organs.",
       "They retain external gills into adulthood.",

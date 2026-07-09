@@ -20,6 +20,14 @@ export type Continent =
   | "Oceans"
   | "Unknown";
 
+export type SpeciesVideo = {
+  title: string;
+  duration: string;
+  type: string;
+  description: string;
+  youtubeId: string;
+};
+
 export type Animal = {
   id: string;
   gbifTaxonKey?: number;
@@ -55,11 +63,18 @@ export type Animal = {
   sourceUrls?: string[];
   lastFetchedAt?: string;
   partial?: boolean;
+  videos?: SpeciesVideo[];
 };
 
 export type AppSettings = {
   dataMode: "mock" | "cached" | "live";
   theme: "dark-academic";
   aiEnabled: boolean;
+  groqApiKey: string;
+  aiModel: string;
+  ecosystemMediaSource: "wikipedia";
   storageLocation: string;
+  enableErrorToasts?: boolean;
+  enableErrorConsoleLogs?: boolean;
+  youtubeApiKey?: string;
 };

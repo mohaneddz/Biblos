@@ -1,4 +1,5 @@
 import type { Animal } from "../types/animal";
+import { BranchIcon } from "./icons";
 
 const labels: Array<[string, string]> = [
   ["Kingdom", "kingdom"],
@@ -13,7 +14,10 @@ const labels: Array<[string, string]> = [
 export function ClassificationTree({ animal }: { animal: Animal }) {
   return (
     <div className="page-card rounded-[1.5rem] p-5">
-      <h2 className="page-section-title">Classification</h2>
+      <h2 className="page-section-title flex items-center gap-2">
+        <BranchIcon className="h-5 w-5 text-app-accent" />
+        Classification
+      </h2>
       <div className="mt-4 grid gap-3">
         {labels.map(([label, key], index) => (
           <div key={label} className="flex items-center gap-3">

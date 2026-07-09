@@ -1,7 +1,7 @@
 export type SpeciesImageAsset = {
   url: string;
   thumbnailUrl?: string;
-  source: "Wikipedia" | "iNaturalist" | "GBIF";
+  source: "Wikipedia" | "iNaturalist" | "GBIF" | "Wikimedia";
   sourceUrl?: string;
   license?: string;
   attribution?: string;

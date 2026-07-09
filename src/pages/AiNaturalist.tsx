@@ -11,10 +11,13 @@ export default function AiNaturalist() {
     <div className="page-frame">
       <section className="page-card rounded-[1.75rem] p-6">
         <h1 className="page-title">AI Naturalist</h1>
-        <p className="page-lede">A local assistant over the Biblos dataset. It answers from cached taxonomy, habitat, behavior, conservation, and comparison fields without requiring live model integrations.</p>
+        <p className="page-lede">A Groq-backed natural history assistant over the Biblos corpus, using local retrieval across taxonomy, biome, behavior, conservation, and comparison records before each answer.</p>
       </section>
       {settings.aiEnabled ? (
-        <AiNaturalistPanel initialPrompt={species ? `Tell me about ${species}` : ""} />
+        <AiNaturalistPanel
+          initialPrompt={species ? `Tell me about ${species}` : ""}
+          speciesName={species}
+        />
       ) : (
         <section className="page-card rounded-[1.75rem] p-6">
           <div className="warning-banner">AI Naturalist is disabled in Settings. Re-enable local AI features to use this panel.</div>

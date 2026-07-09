@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     fs,
     path::{Path, PathBuf},
@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
-const DEFAULT_LOCAL_LIMIT: usize = 24;
 const SEED_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +60,8 @@ struct GbifSearchResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 struct GbifSpeciesSearchItem {
+    #[serde(rename = "key")]
+    key: Option<i64>,
     #[serde(rename = "taxonKey")]
     taxon_key: Option<i64>,
     #[serde(rename = "acceptedTaxonKey")]
@@ -71,6 +72,8 @@ struct GbifSpeciesSearchItem {
     canonical_name: Option<String>,
     #[serde(rename = "vernacularName")]
     vernacular_name: Option<String>,
+    #[serde(rename = "vernacularNames", default)]
+    vernacular_names: Vec<GbifVernacularName>,
     rank: Option<String>,
     kingdom: Option<String>,
     phylum: Option<String>,
@@ -79,7 +82,13 @@ struct GbifSpeciesSearchItem {
     order: Option<String>,
     family: Option<String>,
     genus: Option<String>,
-    status: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GbifVernacularName {
+    #[serde(rename = "vernacularName")]
+    vernacular_name: Option<String>,
+    language: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -103,14 +112,6 @@ struct GbifSpeciesDetails {
     threat: Option<String>,
     native: Option<bool>,
     extinct: Option<bool>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct GbifVernacularResponseItem {
-    #[serde(rename = "vernacularName")]
-    vernacular_name: Option<String>,
-    language: Option<String>,
-    preferred: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -303,11 +304,23 @@ fn make_species_id(gbif_taxon_key: i64) -> String {
 }
 
 fn normalize(value: &str) -> String {
-    value.trim().to_lowercase()
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_alphanumeric() {
+                ch.to_lowercase().to_string()
+            } else {
+                " ".to_string()
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn fts_query(query: &str) -> String {
-    query
+    normalize(query)
         .split_whitespace()
         .map(|term| format!("{}*", term.replace('"', "")))
         .collect::<Vec<_>>()
@@ -315,26 +328,49 @@ fn fts_query(query: &str) -> String {
 }
 
 fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, String) {
-    let q = normalize(query);
-    let common = record.common_name.as_deref().map(normalize).unwrap_or_default();
-    let scientific = normalize(&record.scientific_name);
-    let canonical = normalize(&record.canonical_name);
+  let q = normalize(query);
+  let common = record.common_name.as_deref().map(normalize).unwrap_or_default();
+  let scientific = normalize(&record.scientific_name);
+  let canonical = normalize(&record.canonical_name);
 
     if !common.is_empty() && common == q {
-        return (300.0, "exact_common".into());
+      return (300.0, "exact_common".into());
     }
     if scientific == q || canonical == q {
-        return (260.0, "exact_scientific".into());
+      return (260.0, "exact_scientific".into());
     }
     if !common.is_empty() && common.starts_with(&q) {
         return (220.0, "prefix_common".into());
     }
     if scientific.starts_with(&q) || canonical.starts_with(&q) {
-        return (200.0, "prefix_scientific".into());
+      return (200.0, "prefix_scientific".into());
     }
 
-    let fuzzy = best_similarity(&q, &[&common, &scientific, &canonical, record.family.as_deref().unwrap_or(""), record.genus.as_deref().unwrap_or("")]);
-    (120.0 + fuzzy * 40.0 + fts_rank.max(0.0), "fts".into())
+    let fuzzy = best_similarity(
+        &q,
+        &[
+            &common,
+            &scientific,
+            &canonical,
+            record.family.as_deref().unwrap_or(""),
+            record.genus.as_deref().unwrap_or(""),
+            record.class_name.as_deref().unwrap_or(""),
+        ],
+    );
+    let token_bonus = q
+        .split_whitespace()
+        .filter(|token| !token.is_empty())
+        .map(|token| {
+            let token = token.trim();
+            if common.contains(token) || scientific.contains(token) || canonical.contains(token) {
+                0.12
+            } else {
+                0.0
+            }
+        })
+        .sum::<f64>();
+
+    (120.0 + fuzzy * 40.0 + token_bonus * 120.0 + fts_rank.max(0.0), "fts".into())
 }
 
 fn best_similarity(query: &str, values: &[&str]) -> f64 {
@@ -420,6 +456,53 @@ fn to_search_hit(record: IndexRecord, score: f64, match_reason: String, is_live_
     }
 }
 
+fn search_hit_key(hit: &SpeciesSearchHit) -> String {
+    let canonical = normalize(&hit.canonical_name);
+    if !canonical.is_empty() {
+        return canonical;
+    }
+
+    let scientific = normalize(&hit.scientific_name);
+    if !scientific.is_empty() {
+        return scientific;
+    }
+
+    let common = hit.common_name.as_deref().map(normalize).unwrap_or_default();
+    if !common.is_empty() {
+        return common;
+    }
+
+    hit.id.clone()
+}
+
+fn better_search_hit(candidate: &SpeciesSearchHit, existing: &SpeciesSearchHit) -> bool {
+    candidate.score > existing.score
+        || (candidate.score == existing.score && candidate.common_name.is_some() && existing.common_name.is_none())
+        || (candidate.score == existing.score && candidate.is_live_fallback && !existing.is_live_fallback)
+}
+
+fn dedupe_search_hits(hits: Vec<SpeciesSearchHit>) -> Vec<SpeciesSearchHit> {
+    let mut deduped: HashMap<String, SpeciesSearchHit> = HashMap::new();
+
+    for hit in hits {
+        let key = search_hit_key(&hit);
+        match deduped.get_mut(&key) {
+            Some(existing) => {
+                if better_search_hit(&hit, existing) {
+                    *existing = hit;
+                }
+            }
+            None => {
+                deduped.insert(key, hit);
+            }
+        }
+    }
+
+    let mut values = deduped.into_values().collect::<Vec<_>>();
+    values.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal).then_with(|| a.canonical_name.cmp(&b.canonical_name)));
+    values
+}
+
 pub fn initialize_database(app: Option<&AppHandle>) -> Result<PathBuf> {
     let path = db_path_for_app(app)?;
     let _ = open_connection(&path)?;
@@ -468,7 +551,7 @@ fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result
 }
 
 fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>) -> Option<IndexRecord> {
-    let gbif_taxon_key = item.accepted_taxon_key.or(item.taxon_key)?;
+    let gbif_taxon_key = item.accepted_taxon_key.or(item.taxon_key).or(item.key)?;
     let scientific_name = item.scientific_name.clone()?;
     let canonical_name = item.canonical_name.clone().unwrap_or_else(|| scientific_name.clone());
 
@@ -487,6 +570,18 @@ fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>
         source: "GBIF".into(),
         updated_at: Utc::now().to_rfc3339(),
     })
+}
+
+fn preferred_common_name(item: &GbifSpeciesSearchItem) -> Option<String> {
+    item.vernacular_name
+        .clone()
+        .or_else(|| {
+            item.vernacular_names
+                .iter()
+                .find(|entry| entry.language.as_deref().map(|language| language.eq_ignore_ascii_case("eng")).unwrap_or(false))
+                .and_then(|entry| entry.vernacular_name.clone())
+        })
+        .or_else(|| item.vernacular_names.iter().find_map(|entry| entry.vernacular_name.clone()))
 }
 
 pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> {
@@ -521,7 +616,7 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
                 continue;
             }
 
-            let common_name = item.vernacular_name.clone();
+            let common_name = preferred_common_name(&item);
             if let Some(record) = gbif_item_to_record(&item, common_name) {
                 upsert_species_index(&connection, &record)?;
                 inserted += 1;
@@ -608,7 +703,7 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize) -> Resul
         }
     }
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+    let mut results = dedupe_search_hits(results);
     results.truncate(limit);
     Ok(results)
 }
@@ -621,6 +716,24 @@ pub fn search_index(app: Option<&AppHandle>, query: &str, limit: usize) -> Resul
         hits,
         used_live_fallback: false,
     })
+}
+
+fn ingest_gbif_results(connection: &Connection, payload: GbifSearchResponse) -> Result<Vec<IndexRecord>> {
+  let mut inserted = Vec::new();
+
+  for item in payload.results {
+        let Some(taxon_key) = item.accepted_taxon_key.or(item.taxon_key) else {
+            continue;
+        };
+        if let Some(record) = gbif_item_to_record(&item, preferred_common_name(&item)) {
+            upsert_species_index(connection, &record)?;
+            inserted.push(record);
+        } else {
+            let _ = taxon_key;
+        }
+    }
+
+  Ok(inserted)
 }
 
 pub async fn live_search_fallback(app: Option<&AppHandle>, query: &str, limit: usize) -> Result<SearchResponse> {
@@ -642,36 +755,68 @@ pub async fn live_search_fallback(app: Option<&AppHandle>, query: &str, limit: u
     let connection = open_connection(&path)?;
     let client = Client::builder().user_agent("Biblos/0.1").build()?;
     let url = format!(
-        "https://api.gbif.org/v1/species/search?q={}&kingdom=Animalia&rank=SPECIES&status=ACCEPTED&limit={}",
+        "https://api.gbif.org/v1/species/search?q={}&kingdom=Animalia&status=ACCEPTED&limit={}",
         urlencoding::encode(trimmed),
         limit
     );
 
     let response = client.get(url).send().await?;
     if !response.status().is_success() {
-        return Ok(local);
+      return Ok(local);
     }
 
     let payload: GbifSearchResponse = response.json().await?;
+    let records = ingest_gbif_results(&connection, payload)?;
     let mut hits = Vec::new();
-
-    for item in payload.results {
-        let Some(_taxon_key) = item.accepted_taxon_key.or(item.taxon_key) else {
-            continue;
-        };
-        if let Some(record) = gbif_item_to_record(&item, item.vernacular_name.clone()) {
-            upsert_species_index(&connection, &record)?;
-            let (score, reason) = score_local_hit(&record, trimmed, 0.0);
-            hits.push(to_search_hit(record, score, reason, true));
-        }
+    for record in records {
+        let (score, reason) = score_local_hit(&record, trimmed, 0.0);
+        hits.push(to_search_hit(record, score, reason, true));
     }
 
-    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+    let mut hits = dedupe_search_hits(hits);
     hits.truncate(limit);
 
     Ok(SearchResponse {
         hits,
         used_live_fallback: true,
+    })
+}
+
+pub async fn lookup_and_store_species(app: Option<&AppHandle>, query: &str, limit: usize) -> Result<SearchResponse> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(SearchResponse {
+            hits: Vec::new(),
+            used_live_fallback: false,
+        });
+    }
+
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let url = format!(
+        "https://api.gbif.org/v1/species/search?q={}&kingdom=Animalia&status=ACCEPTED&limit={}",
+        urlencoding::encode(trimmed),
+        limit.max(20)
+    );
+    let response = client.get(url).send().await?;
+    if !response.status().is_success() {
+        return search_index(app, trimmed, limit);
+    }
+
+    let payload: GbifSearchResponse = response.json().await?;
+    let records = ingest_gbif_results(&connection, payload)?;
+    let mut hits = Vec::new();
+    for record in records {
+        let (score, reason) = score_local_hit(&record, trimmed, 0.0);
+        hits.push(to_search_hit(record, score, reason, false));
+    }
+    let mut hits = dedupe_search_hits(hits);
+    hits.truncate(limit);
+
+    Ok(SearchResponse {
+        hits,
+        used_live_fallback: false,
     })
 }
 

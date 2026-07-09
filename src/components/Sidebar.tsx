@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import {
-  AtlasIcon,
   BranchIcon,
   BrainSparkIcon,
   CollectionIcon,
@@ -21,7 +20,6 @@ const navItems = [
   ["/ecosystems", "Ecosystems", LeafClusterIcon],
   ["/ai", "AI Naturalist", BrainSparkIcon],
   ["/compare", "Compare", CompareIcon],
-  ["/atlas", "Atlas", AtlasIcon],
   ["/collection", "Collection", CollectionIcon],
   ["/settings", "Settings", SettingsIcon],
 ] as const;
