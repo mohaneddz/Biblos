@@ -114,6 +114,19 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").toLowerCase().trim();
 }
 
+/**
+ * Extract the bare binomial (Genus species) from a GBIF scientificName that
+ * often carries the authority and year: "Equus quagga Boddaert, 1785" → "Equus quagga".
+ * Also handles monomials (genus only): "Carcharias Rafinesque, 1810" → "Carcharias".
+ * Returns the original string unchanged if no match (safe fallback).
+ */
+function canonicalBinomial(scientificName: string): string {
+  // Binomial nomenclature: 'Genus species' where species epithet is all lowercase.
+  // The regex stops before the authority (Capitalized name or year after space).
+  const match = scientificName.match(/^([A-Z][a-z]+(?:\s+[a-z][a-z-]+)?)/);
+  return match ? match[1] : scientificName;
+}
+
 function cacheKey(animalId: string, mode: SpeciesMediaMode) {
   return `${MEDIA_CACHE_PREFIX}${mode}.${animalId}`;
 }
@@ -190,8 +203,11 @@ function stripHtml(value: string | undefined): string | undefined {
 // ─── Wikipedia Primary Image ─────────────────────────────────────────────────
 
 async function fetchWikipediaPrimary(animal: Animal): Promise<SpeciesImageAsset | null> {
-  // Try scientific name first (more precise), then common name
-  const candidates = [animal.scientificName, animal.commonName];
+  // Wikipedia page titles use the canonical binomial, NOT the full GBIF scientific name
+  // which includes author+year (e.g. "Equus quagga Boddaert, 1785" → 404 on Wikipedia).
+  const canonical = canonicalBinomial(animal.scientificName);
+  // Try canonical scientific name first (most precise), then common name
+  const candidates = [canonical, animal.commonName];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -227,9 +243,13 @@ async function fetchWikipediaPrimary(animal: Animal): Promise<SpeciesImageAsset 
 async function fetchWikimediaCommonsAssets(animal: Animal): Promise<SpeciesImageAsset[]> {
   const results: SpeciesImageAsset[] = [];
 
+  // Wikimedia Commons categories use the canonical binomial only (no author/year).
+  // e.g. "Category:Equus quagga", NOT "Category:Equus quagga Boddaert, 1785".
+  const canonical = canonicalBinomial(animal.scientificName);
+
   // Strategy 1: direct category lookup by scientific name
   const categoryTitles = [
-    `Category:${animal.scientificName}`,
+    `Category:${canonical}`,
     // Also try genus-level if species-level returns nothing
     animal.classification?.genus ? `Category:${animal.classification.genus}` : null,
   ].filter(Boolean) as string[];
@@ -282,10 +302,12 @@ async function fetchWikimediaCommonsAssets(animal: Animal): Promise<SpeciesImage
 
   // Strategy 2: if category search yielded nothing, do a full-text search
   if (results.length === 0) {
+    // Use canonical binomial for text search — author names confuse the search engine
+    const canonical = canonicalBinomial(animal.scientificName);
     const searchUrl =
       `https://commons.wikimedia.org/w/api.php?action=query` +
       `&list=search` +
-      `&srsearch=${encodeURIComponent(animal.scientificName)}` +
+      `&srsearch=${encodeURIComponent(canonical)}` +
       `&srnamespace=6` + // File namespace
       `&srlimit=10` +
       `&format=json` +
@@ -340,8 +362,11 @@ async function fetchWikimediaCommonsAssets(animal: Animal): Promise<SpeciesImage
 // ─── iNaturalist ─────────────────────────────────────────────────────────────
 
 async function findINaturalistTaxonId(animal: Animal): Promise<number | null> {
-  // Try exact scientific name match first, then common name
-  const candidates = [animal.scientificName, animal.commonName].filter(Boolean);
+  // Use the canonical binomial for iNaturalist queries. The full GBIF scientific name
+  // includes author+year (e.g. "Equus quagga Boddaert, 1785") which iNat doesn't store,
+  // causing the query to return 0 results and the exact-match check to always fail.
+  const canonical = canonicalBinomial(animal.scientificName);
+  const candidates = [canonical, animal.commonName].filter(Boolean);
 
   for (const candidate of candidates) {
     const data = await fetchJson<{ results?: INaturalistSearchResult[] }>(
@@ -350,8 +375,9 @@ async function findINaturalistTaxonId(animal: Animal): Promise<number | null> {
 
     const results = data?.results ?? [];
 
-    // Strict: exact scientific name match or exact common name match
+    // Match against both the canonical binomial AND the full scientific name, and common name
     const match =
+      results.find((r) => normalize(r.name) === normalize(canonical)) ??
       results.find((r) => normalize(r.name) === normalize(animal.scientificName)) ??
       results.find((r) => normalize(r.preferred_common_name) === normalize(animal.commonName));
 
@@ -362,14 +388,16 @@ async function findINaturalistTaxonId(animal: Animal): Promise<number | null> {
 }
 
 async function fetchINaturalistPrimary(animal: Animal): Promise<SpeciesImageAsset | null> {
-  // Try exact match for the default photo
-  const candidates = [animal.scientificName, animal.commonName].filter(Boolean);
+  // Use canonical binomial for iNat queries — full GBIF names include author+year
+  const canonical = canonicalBinomial(animal.scientificName);
+  const candidates = [canonical, animal.commonName].filter(Boolean);
   for (const candidate of candidates) {
     const data = await fetchJson<{ results?: INaturalistSearchResult[] }>(
       `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(candidate)}&per_page=10`,
     );
     const results = data?.results ?? [];
     const match =
+      results.find((r) => normalize(r.name) === normalize(canonical)) ??
       results.find((r) => normalize(r.name) === normalize(animal.scientificName)) ??
       results.find((r) => normalize(r.preferred_common_name) === normalize(animal.commonName));
 
@@ -421,7 +449,12 @@ async function fetchINaturalistAssets(animal: Animal): Promise<SpeciesImageAsset
     `https://api.inaturalist.org/v1/observations?taxon_id=${taxonId}&photos=true&quality_grade=research&per_page=20&order_by=votes`,
   );
   const obsPhotos: SpeciesImageAsset[] = (obsData?.results ?? [])
-    .flatMap((obs) => obs.photos ?? [])
+    .flatMap((obs) => {
+      const photos = obs.photos ?? [];
+      const firstPhoto = photos[0];
+      if (!firstPhoto) return [];
+      return [firstPhoto];
+    })
     .filter((photo) => isOpenLicense(photo.license_code))
     .map((photo): SpeciesImageAsset => {
       // iNaturalist photo URLs use /square.jpg suffix — replace with /large.jpg
@@ -480,17 +513,20 @@ async function fetchGBIFAssets(animal: Animal): Promise<SpeciesImageAsset[]> {
   );
 
   const occurrenceAssets = (data?.results ?? [])
-    .flatMap((occurrence) =>
-      (occurrence.media ?? []).map((media): SpeciesImageAsset => ({
-        url: media.identifier ?? "",
-        thumbnailUrl: media.identifier ?? undefined,
+    .flatMap((occurrence) => {
+      const mediaList = occurrence.media ?? [];
+      const firstMedia = mediaList[0];
+      if (!firstMedia) return [];
+      return [{
+        url: firstMedia.identifier ?? "",
+        thumbnailUrl: firstMedia.identifier ?? undefined,
         source: "GBIF" as const,
-        sourceUrl: media.references ?? occurrence.occurrenceID,
-        license: media.license,
-        attribution: media.creator ?? media.rightsHolder ?? media.publisher ?? "GBIF occurrence media",
+        sourceUrl: firstMedia.references ?? occurrence.occurrenceID,
+        license: firstMedia.license,
+        attribution: firstMedia.creator ?? firstMedia.rightsHolder ?? firstMedia.publisher ?? "GBIF occurrence media",
         alt: makeAlt(animal, "GBIF"),
-      })),
-    )
+      }];
+    })
     .filter((a) => Boolean(a.url))
     .filter((a) => isOpenLicense(a.license));
 
@@ -500,9 +536,21 @@ async function fetchGBIFAssets(animal: Animal): Promise<SpeciesImageAsset[]> {
 
 // ─── Primary Image Resolution ─────────────────────────────────────────────────
 
-async function resolvePrimaryMedia(animal: Animal): Promise<SpeciesMediaBundle> {
+async function resolvePrimaryMedia(animal: Animal, skipFallback = false): Promise<SpeciesMediaBundle> {
   const cached = readCache(animal.id, "primary");
   if (cached) return cached;
+
+  // Fallback: check if we already have full media cached!
+  const cachedFull = readCache(animal.id, "full");
+  if (cachedFull && cachedFull.primary) {
+    const bundle = {
+      primary: cachedFull.primary,
+      gallery: cachedFull.primary ? [cachedFull.primary] : [],
+      resolvedAt: cachedFull.resolvedAt,
+    };
+    writeCache(animal.id, "primary", bundle);
+    return bundle;
+  }
 
   // Run all primary sources in parallel — first non-null wins
   const [wikipediaPrimary, iNaturalistPrimary] = await Promise.all([
@@ -510,9 +558,20 @@ async function resolvePrimaryMedia(animal: Animal): Promise<SpeciesMediaBundle> 
     fetchINaturalistPrimary(animal),
   ]);
 
-  // Prefer iNaturalist (actual photo) over Wikipedia (may be a diagram)
-  // but Wikipedia wins if iNat returns nothing
-  const primary = iNaturalistPrimary ?? wikipediaPrimary ?? null;
+  let primary = iNaturalistPrimary ?? wikipediaPrimary ?? null;
+
+  // If still null, try a fallback search on Wikimedia Commons category or GBIF occurrences!
+  if (!primary && !skipFallback) {
+    const wikiAssets = await fetchWikimediaCommonsAssets(animal);
+    if (wikiAssets.length > 0) {
+      primary = wikiAssets[0];
+    } else {
+      const gbifAssets = await fetchGBIFAssets(animal);
+      if (gbifAssets.length > 0) {
+        primary = gbifAssets[0];
+      }
+    }
+  }
 
   const bundle: SpeciesMediaBundle = {
     primary,
@@ -520,7 +579,9 @@ async function resolvePrimaryMedia(animal: Animal): Promise<SpeciesMediaBundle> 
     resolvedAt: new Date().toISOString(),
   };
 
-  writeCache(animal.id, "primary", bundle);
+  if (!skipFallback || primary) {
+    writeCache(animal.id, "primary", bundle);
+  }
   return bundle;
 }
 
@@ -532,7 +593,7 @@ async function resolveFullMedia(animal: Animal): Promise<SpeciesMediaBundle> {
 
   // Fetch all sources in parallel
   const [primaryBundle, wikiCommonsAssets, inatAssets, gbifAssets] = await Promise.all([
-    resolvePrimaryMedia(animal),
+    resolvePrimaryMedia(animal, true),
     fetchWikimediaCommonsAssets(animal),
     fetchINaturalistAssets(animal),
     fetchGBIFAssets(animal),

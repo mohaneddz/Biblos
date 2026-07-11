@@ -168,7 +168,7 @@ export async function lookupSpeciesAndStore(query: string, limit = 50) {
 
     const [aiSuggestions, localLookup] = await Promise.all([aiSuggestionsPromise, localLookupPromise]);
 
-    const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName));
+    const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName, query));
     const aiHits = (await Promise.all(aiHitsPromises)).filter((h): h is SpeciesSearchHit => Boolean(h));
 
     const combinedHits = [...aiHits, ...localLookup.hits];

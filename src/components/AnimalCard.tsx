@@ -66,6 +66,12 @@ export function AnimalCard({ animal }: AnimalCardProps) {
     }
   };
 
+  const handleCopyAnimalInfo = () => {
+    navigator.clipboard.writeText(JSON.stringify(animal, null, 2))
+      .then(() => toastService.success("Copied animal information to clipboard"))
+      .catch((err) => reportError("Failed to copy animal information", err));
+  };
+
   const handleHide = () => {
     hideSpecies(animal.id);
     toastService.success(`Hidden "${animal.commonName}" from directory`);
@@ -95,7 +101,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
 
   // Prevent menu overflow
   const x = menuPos ? Math.min(menuPos.x, window.innerWidth - 200) : 0;
-  const y = menuPos ? Math.min(menuPos.y, window.innerHeight - 340) : 0;
+  const y = menuPos ? Math.min(menuPos.y, window.innerHeight - 380) : 0;
 
   const btnClass = "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-app-text hover:bg-white/10 transition cursor-pointer";
 
@@ -113,10 +119,9 @@ export function AnimalCard({ animal }: AnimalCardProps) {
             fitClassName="h-full w-full object-cover transition duration-500"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,5,0.02),rgba(3,6,5,0.82))]" />
-          
+
 
           <div className="absolute inset-x-0 bottom-0 p-5">
-            <p className="text-[0.68rem] uppercase tracking-[0.34em] text-app-accent/90">Species Entry</p>
             <div className="mt-2 flex items-end justify-between gap-4">
               <div>
                 <h3 className="text-2xl font-semibold text-white">{animal.commonName}</h3>
@@ -269,7 +274,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 setMenuPos(null);
               }}
             >
-              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
               <span>Copy common name</span>
             </button>
             <button
@@ -280,7 +285,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 setMenuPos(null);
               }}
             >
-              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
               <span>Copy scientific name</span>
             </button>
             <button
@@ -291,8 +296,19 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 setMenuPos(null);
               }}
             >
-              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
               <span>Copy image URL</span>
+            </button>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={() => {
+                handleCopyAnimalInfo();
+                setMenuPos(null);
+              }}
+            >
+              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"/><path d="M14 12a1 1 0 0 1 1 1v1a1 1 0 0 0 1 1 1 1 0 0 0-1 1v1a1 1 0 0 1-1 1"/></svg>
+              <span>Copy animal information</span>
             </button>
 
             <hr className="my-1 border-t border-white/10" />
@@ -305,7 +321,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 setMenuPos(null);
               }}
             >
-              <svg className="h-4 w-4 text-app-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <svg className="h-4 w-4 text-app-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
               <span>Enrich with AI</span>
             </button>
             <button
@@ -316,7 +332,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 setMenuPos(null);
               }}
             >
-              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              <svg className="h-4 w-4 text-app-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
               <span>Hide species</span>
             </button>
 
@@ -331,7 +347,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                     setMenuPos(null);
                   }}
                 >
-                  <svg className="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  <svg className="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
                   <span>Delete cached data</span>
                 </button>
               </>

@@ -4,16 +4,42 @@ import { AnimalCard } from "../components/AnimalCard";
 import { SearchBar } from "../components/SearchBar";
 import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
-import { getBookmarkedSpecies, getFavorites, getAllCachedSpecies, getHiddenSpecies, setCachedSpecies } from "../services/cache";
+import { getBookmarkedSpecies, getFavorites, getAllCachedSpecies, getHiddenSpecies } from "../services/cache";
 import { searchAnimals } from "../services/searchAnimals";
-import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, hydrateSpeciesProfile, hydrateSpeciesWithAI, type SpeciesSearchHit } from "../services/speciesStore";
-import { getSpeciesMedia } from "../services/speciesMedia";
+import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, type SpeciesSearchHit } from "../services/speciesStore";
 import type { Animal, Continent } from "../types/animal";
-import { RefreshIcon, AtlasIcon, CompassIcon } from "../components/icons";
+import { RefreshIcon, AtlasIcon, CompassIcon, CopyIcon } from "../components/icons";
 import { reportError } from "../services/errorReporter";
+import { toastService } from "../services/toastService";
 
 function unique<T>(items: T[]) {
   return [...new Set(items)].sort();
+}
+
+/** Unified relevance score used when merging browse + indexed results. */
+function mergeRelevanceScore(animal: Animal, query: string): number {
+  const common = animal.commonName.toLowerCase();
+  const words = common.split(/\s+/);
+  let score = 0;
+
+  // Richness boost: fully-detailed entries rank above bare placeholders
+  const isRich = !animal.partial && animal.coolFacts.length > 0;
+  if (isRich) score += 100;
+
+  // Head-noun match: "Bengal Tiger" for query "tiger" → IS a tiger
+  if (common === query) {
+    score += 200;
+  } else if (words.length > 1 && words[words.length - 1] === query) {
+    score += 80;
+  } else if (common.startsWith(query)) {
+    score += 60;
+  } else if (words.includes(query)) {
+    score += 50;
+  } else if (common.includes(query)) {
+    score += 20;
+  }
+
+  return score;
 }
 
 export default function Species() {
@@ -23,7 +49,7 @@ export default function Species() {
   const [indexedHits, setIndexedHits] = useState<SpeciesSearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [hydratingIds, setHydratingIds] = useState<Set<string>>(() => new Set());
+
 
   const favorites = useMemo(() => getFavorites(), [storageVersion]);
   const bookmarks = useMemo(() => getBookmarkedSpecies(), [storageVersion]);
@@ -64,8 +90,59 @@ export default function Species() {
   const browseResults = useMemo(() => searchAnimals(allAvailableAnimals, filters), [allAvailableAnimals, filters]);
   const indexedResults = useMemo(() => indexedHits.map(previewAnimalFromHit), [indexedHits]);
 
+  // browseResults (local + cached animals) are always available instantly.
+  // indexedResults (GBIF placeholders) are merged in as they arrive from the async search.
+  // This means the grid is NEVER empty while a query is active — local matches show up
+  // immediately on every keystroke, and GBIF hits appear on top once fetched.
   const results = useMemo(() => {
-    const rawResults = useIndexedSearch ? indexedResults : browseResults;
+    let rawResults: Animal[] = [];
+    if (useIndexedSearch) {
+      const seenIds = new Set<string>();
+      const seenNames = new Set<string>();
+
+      // 1. Add browseResults first (fully detailed static / cached entries) — these are
+      //    available synchronously on every render, so the grid is never gated on network.
+      for (const animal of browseResults) {
+        rawResults.push(animal);
+        seenIds.add(animal.id);
+        seenNames.add(animal.scientificName.toLowerCase());
+        if (animal.commonName) {
+          seenNames.add(animal.commonName.toLowerCase());
+        }
+      }
+
+      // 2. Add indexedResults (placeholders) if not already represented.
+      // We also deduplicate by common name: if we already have any animal with the
+      // same vernacular name (e.g. "aye aye" genus AND "aye aye" species), keep only
+      // the one we already added (browse results win; within indexed, first/highest wins).
+      for (const animal of indexedResults) {
+        const sciLower = animal.scientificName.toLowerCase();
+        const comLower = animal.commonName.toLowerCase();
+        // Skip if this exact record is already seen, OR if we already have a different
+        // record with the same common name (prevents genus/family/species triplicates).
+        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) {
+          continue;
+        }
+        rawResults.push(animal);
+        seenIds.add(animal.id);
+        seenNames.add(sciLower);
+        seenNames.add(comLower);
+      }
+
+      // 3. Sort merged results by unified relevance score
+      const q = filters.query.trim().toLowerCase();
+      if (q) {
+        rawResults.sort((a, b) => {
+          const scoreA = mergeRelevanceScore(a, q);
+          const scoreB = mergeRelevanceScore(b, q);
+          if (scoreA !== scoreB) return scoreB - scoreA;
+          return a.commonName.localeCompare(b.commonName);
+        });
+      }
+    } else {
+      rawResults = browseResults;
+    }
+
     return rawResults.filter((animal) => {
       if (filters.className && animal.classification.className !== filters.className) return false;
       if (filters.habitat && !animal.habitat.includes(filters.habitat)) return false;
@@ -111,6 +188,18 @@ export default function Species() {
   function bumpStorage() {
     setStorageVersion((value) => value + 1);
   }
+
+  const handleCopyResults = () => {
+    const jsonStr = JSON.stringify(visibleResults, null, 2);
+    navigator.clipboard.writeText(jsonStr)
+      .then(() => {
+        toastService.success(`Copied ${visibleResults.length} species as JSON`);
+      })
+      .catch((err) => {
+        console.error("Failed to copy results", err);
+        reportError("Failed to copy search results", err);
+      });
+  };
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
@@ -170,51 +259,7 @@ export default function Species() {
     return () => window.removeEventListener("biblos-cache-updated", handler);
   }, []);
 
-  // Background parallel hydration of partial/placeholder search hits
-  useEffect(() => {
-    const partials = visibleResults.filter(
-      (animal) => animal.partial && !hydratingIds.has(animal.id)
-    );
 
-    if (partials.length === 0) return;
-
-    // Mark as hydrating to prevent double triggers
-    setHydratingIds((prev) => {
-      const next = new Set(prev);
-      partials.forEach((p) => next.add(p.id));
-      return next;
-    });
-
-    // Fire off all hydrations in parallel
-    partials.forEach(async (placeholder) => {
-      try {
-        console.debug(`[bg-hydration] Start hydrations for "${placeholder.commonName}" (${placeholder.id})`);
-        
-        // 1. Fetch taxonomic details from GBIF API (Tauri fallback or backend)
-        const next = await hydrateSpeciesProfile(placeholder.id);
-        let current = next.animal;
-
-        // 2. Enrich with Groq LLM to fill natural history notes and diet/class
-        const hydrated = await hydrateSpeciesWithAI(current);
-
-        // 3. Save to Cache (this dispatches the "biblos-cache-updated" event, triggering re-render)
-        setCachedSpecies(hydrated);
-
-        // 4. Pre-fetch media (Wikipedia/iNaturalist/GBIF images) in parallel in the background
-        await getSpeciesMedia(hydrated, "full");
-
-        console.debug(`[bg-hydration] Completed hydration for "${hydrated.commonName}"`);
-      } catch (err) {
-        console.warn(`[bg-hydration] Hydration failed for "${placeholder.commonName}"`, err);
-      } finally {
-        setHydratingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(placeholder.id);
-          return next;
-        });
-      }
-    });
-  }, [visibleResults, hydratingIds]);
 
   useEffect(() => {
     if (!useIndexedSearch) {
@@ -224,33 +269,31 @@ export default function Species() {
     }
 
     let active = true;
-    const timer = window.setTimeout(() => {
-      setSearchLoading(true);
-      console.info("[species-search] local search started", { query: filters.query });
+    // Run immediately on the next microtask tick — no debounce delay needed since
+    // browseResults are already shown synchronously and this only adds GBIF placeholders.
+    setSearchLoading(true);
+    console.info("[species-search] local search started", { query: filters.query });
 
-      void searchSpeciesLocal(filters.query, 24)
-        .then((response) => {
-          if (!active) {
-            return;
-          }
-
-          setIndexedHits(response.hits);
-          console.info("[species-search] local search finished", {
-            query: filters.query,
-            hits: response.hits.length,
-            usedLiveFallback: response.used_live_fallback,
-          });
-        })
-        .finally(() => {
-          if (active) {
-            setSearchLoading(false);
-          }
+    void searchSpeciesLocal(filters.query, 24)
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        setIndexedHits(response.hits);
+        console.info("[species-search] local search finished", {
+          query: filters.query,
+          hits: response.hits.length,
+          usedLiveFallback: response.used_live_fallback,
         });
-    }, 90);
+      })
+      .finally(() => {
+        if (active) {
+          setSearchLoading(false);
+        }
+      });
 
     return () => {
       active = false;
-      window.clearTimeout(timer);
     };
   }, [filters.query, useIndexedSearch]);
 
@@ -378,14 +421,26 @@ export default function Species() {
       ) : null}
 
       {visibleResults.length > 0 ? (
-        <section className="page-grid page-grid-3">
-          {visibleResults.map((animal) => (
-            <AnimalCard
-              key={animal.id}
-              animal={animal}
-            />
-          ))}
-        </section>
+        <>
+          <section className="page-grid page-grid-3">
+            {visibleResults.map((animal) => (
+              <AnimalCard
+                key={animal.id}
+                animal={animal}
+              />
+            ))}
+          </section>
+          <div className="flex justify-center mt-6">
+            <button
+              type="button"
+              onClick={handleCopyResults}
+              className="ghost-button"
+            >
+              <CopyIcon className="h-5 w-5 text-app-accent" />
+              <span>Copy Results</span>
+            </button>
+          </div>
+        </>
       ) : (
         <section className="flex items-start gap-4 rounded-[1.25rem] border border-white/8 bg-black/15 px-5 py-5 text-app-muted">
           <span className="loading-orb flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-app-accent">

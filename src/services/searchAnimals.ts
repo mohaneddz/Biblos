@@ -58,9 +58,23 @@ function scoreAnimal(animal: Animal, query: string) {
   if (common === q || scientific === q) {
     return 100;
   }
+
+  // Head-noun match: query is the last word of the common name.
+  // e.g. "Bengal Tiger" for query "tiger" → this animal IS a tiger.
+  const words = common.split(/\s+/);
+  if (words.length > 1 && words[words.length - 1] === q) {
+    return 80;
+  }
+
   if (common.startsWith(q) || scientific.startsWith(q)) {
     return 60;
   }
+
+  // Query appears as a complete word somewhere in the name
+  if (words.includes(q)) {
+    return 50;
+  }
+
   if (haystack.includes(q)) {
     return 20;
   }
