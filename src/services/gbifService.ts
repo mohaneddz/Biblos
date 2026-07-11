@@ -41,6 +41,15 @@ export function toSearchHitFromGbif(item: GbifSearchItem, index = 0, query = "")
     return null;
   }
 
+  // Filter out higher-rank taxonomic entries: GBIF returns GENUS, FAMILY, ORDER,
+  // CLASS, PHYLUM, KINGDOM records which look like duplicate species in the UI.
+  // We only want SPECIES and SUBSPECIES (or VARIETY/FORM for edge cases).
+  const rank = (item.rank ?? "").toUpperCase();
+  const ACCEPTABLE_RANKS = new Set(["SPECIES", "SUBSPECIES", "VARIETY", "FORM", "INFRASPECIFIC_NAME", ""]);
+  if (rank && !ACCEPTABLE_RANKS.has(rank)) {
+    return null;
+  }
+
   const canonicalName = item.canonicalName?.trim() || scientificName;
   const commonName = preferredCommonName(item);
 
@@ -94,6 +103,10 @@ export function toSearchHitFromGbif(item: GbifSearchItem, index = 0, query = "")
 
 export function dedupeSearchHits(hits: SpeciesSearchHit[], query = "") {
   const deduped = new Map<string, SpeciesSearchHit>();
+  // Secondary index: common_name → best hit, to collapse genus/family/species
+  // entries that all share the same vernacular name (e.g. three "aye aye" records).
+  const commonNameBest = new Map<string, SpeciesSearchHit>();
+
   const q = query.trim().toLowerCase();
   const qNorm = q.replace(/s$/, ""); // Normalize trailing s for plural matching
 
@@ -128,23 +141,50 @@ export function dedupeSearchHits(hits: SpeciesSearchHit[], query = "") {
     const existing = deduped.get(key);
     if (!existing) {
       deduped.set(key, hitWithBoost);
-      continue;
+    } else {
+      const better =
+        hitWithBoost.score > existing.score ||
+        (hitWithBoost.score === existing.score && Boolean(hitWithBoost.common_name) && !existing.common_name) ||
+        (hitWithBoost.score === existing.score && hitWithBoost.is_live_fallback && !existing.is_live_fallback);
+      if (better) {
+        deduped.set(key, hitWithBoost);
+      }
     }
 
-    const better =
-      hitWithBoost.score > existing.score ||
-      (hitWithBoost.score === existing.score && Boolean(hitWithBoost.common_name) && !existing.common_name) ||
-      (hitWithBoost.score === existing.score && hitWithBoost.is_live_fallback && !existing.is_live_fallback);
-
-    if (better) {
-      deduped.set(key, hitWithBoost);
+    // --- Common-name deduplication: if two hits share the same vernacular name,
+    // keep only the one with the highest score (prefer SPECIES over GENUS/FAMILY).
+    const cNameKey = (hit.common_name || "").toLowerCase().trim();
+    if (cNameKey) {
+      const existingByName = commonNameBest.get(cNameKey);
+      if (!existingByName || hitWithBoost.score > existingByName.score) {
+        commonNameBest.set(cNameKey, hitWithBoost);
+      }
     }
   }
 
-  return [...deduped.values()].sort((a, b) => b.score - a.score || a.canonical_name.localeCompare(b.canonical_name));
+  // Remove any canonical-name entries that were beaten by a same-common-name but
+  // different-canonical-name hit (i.e., genus/family entries that lost to the true species).
+  const survivingKeys = new Set<string>();
+  for (const winner of commonNameBest.values()) {
+    const winnerKey = normalizeSearchText(winner.canonical_name || winner.scientific_name || winner.common_name || winner.id);
+    survivingKeys.add(winnerKey);
+  }
+
+  const filtered = [...deduped.values()].filter((hit) => {
+    const cNameKey = (hit.common_name || "").toLowerCase().trim();
+    if (!cNameKey) return true; // no common name → keep as-is
+    const winner = commonNameBest.get(cNameKey);
+    if (!winner) return true;
+    const hitKey = normalizeSearchText(hit.canonical_name || hit.scientific_name || hit.common_name || hit.id);
+    const winnerKey = normalizeSearchText(winner.canonical_name || winner.scientific_name || winner.common_name || winner.id);
+    // Suppress this hit only if a different, better-scoring entry shares its common name
+    return hitKey === winnerKey;
+  });
+
+  return filtered.sort((a, b) => b.score - a.score || a.canonical_name.localeCompare(b.canonical_name));
 }
 
-export async function fetchGbifMatch(scientificName: string, commonName: string): Promise<SpeciesSearchHit | null> {
+export async function fetchGbifMatch(scientificName: string, commonName: string, query = ""): Promise<SpeciesSearchHit | null> {
   try {
     const response = await fetch(
       `https://api.gbif.org/v1/species/match?name=${encodeURIComponent(scientificName)}&kingdom=Animalia`
@@ -154,6 +194,20 @@ export async function fetchGbifMatch(scientificName: string, commonName: string)
     }
     const data = await response.json();
     if (data.usageKey && data.kingdom?.toLowerCase() === "animalia") {
+      // Score the AI hit based on how well the common name actually matches the query.
+      // Without this, AI suggestions for e.g. 'zebra' could inject 'African Lion'
+      // (an ecosystem co-inhabitant) with score 5000, outranking every real zebra result.
+      const q = query.trim().toLowerCase();
+      const cName = (commonName || data.vernacularName || "").toLowerCase();
+      const sName = (data.canonicalName || scientificName || "").toLowerCase();
+      let score = 1500; // default: strong signal but not overwhelming
+      if (q) {
+        if (cName === q) score = 3000;
+        else if (cName.startsWith(q) || cName.split(" ").some((w: string) => w.startsWith(q))) score = 2500;
+        else if (cName.includes(q) || sName.includes(q)) score = 1500;
+        else score = 200; // AI hallucinated something unrelated to the query
+      }
+
       return {
         id: `gbif-${data.usageKey}`,
         gbif_taxon_key: data.usageKey,
@@ -169,7 +223,7 @@ export async function fetchGbifMatch(scientificName: string, commonName: string)
         genus: data.genus || null,
         source: "GBIF",
         updated_at: new Date().toISOString(),
-        score: 5000,
+        score,
         match_reason: "gbif_common_name",
         is_live_fallback: true,
       };
@@ -194,7 +248,8 @@ export async function fetchGbifSearch(query: string, limit: number): Promise<Sea
 
   const [aiSuggestions, payload] = await Promise.all([aiSuggestionsPromise, gbifSearchPromise]);
 
-  const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName));
+  // Pass the query to fetchGbifMatch so it can score hits by relevance.
+  const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName, query));
   const aiHits = (await Promise.all(aiHitsPromises)).filter((h): h is SpeciesSearchHit => Boolean(h));
 
   const gbifHits = (payload.results ?? [])
