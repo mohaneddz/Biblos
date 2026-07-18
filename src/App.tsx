@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import Titlebar from "./components/Titlebar";
@@ -15,11 +16,26 @@ import SpeciesDetail from "./pages/SpeciesDetail";
 import TreeOfLife from "./pages/TreeOfLife";
 
 function Layout() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("biblos.sidebar.collapsed") === "true";
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("biblos.sidebar.collapsed", String(next));
+      return next;
+    });
+  };
+
   return (
     <div className="app-shell">
       <Titlebar />
-      <div className="app-workspace text-app-text">
-        <Sidebar />
+      <div className={`app-workspace text-app-text ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
         <main className="content-shell">
           <Outlet />
         </main>
