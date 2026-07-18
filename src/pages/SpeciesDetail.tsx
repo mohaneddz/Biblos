@@ -32,7 +32,7 @@ export default function SpeciesDetail() {
   const { id = "" } = useParams();
   const baseAnimal = animalMap.get(id);
   const [animal, setAnimal] = useState<Animal | null>(() => getCachedSpecies(id) ?? baseAnimal ?? null);
-  const [loading, setLoading] = useState(() => !baseAnimal && id.startsWith("gbif-"));
+  const [loading, setLoading] = useState(() => !baseAnimal && (id.startsWith("gbif-") || id.startsWith("wiki-")));
   const [favorites, setFavorites] = useState(() => getFavorites());
   const [bookmarks, setBookmarks] = useState(() => getBookmarkedSpecies());
   const { gallery } = useSpeciesMedia(animal, "full");
@@ -47,6 +47,8 @@ export default function SpeciesDetail() {
         description: v.description,
         url: `https://www.youtube.com/watch?v=${v.youtubeId}`,
         youtubeId: v.youtubeId,
+        views: v.views,
+        channelName: v.channelName,
       }));
     }
     return [];
@@ -61,7 +63,7 @@ export default function SpeciesDetail() {
     setAnimal(seededAnimal);
     pushRecentlyViewed(id);
 
-    const shouldHydrate = !seededAnimal || seededAnimal.partial || id.startsWith("gbif-");
+    const shouldHydrate = !seededAnimal || seededAnimal.partial || id.startsWith("gbif-") || id.startsWith("wiki-");
     if (!shouldHydrate) {
       setLoading(false);
       return;
@@ -144,8 +146,14 @@ export default function SpeciesDetail() {
     return (
       <div className="page-frame">
         <section className="page-card rounded-[1.75rem] p-6">
-          <h1 className="page-title">Hydrating species record</h1>
-          <p className="page-lede">Biblos found the indexed species entry and is now assembling taxonomy, images, and readable facts from cached and live sources.</p>
+          <h1 className="page-title">
+            {id.startsWith("wiki-") ? "Fetching species from Wikipedia" : "Hydrating species record"}
+          </h1>
+          <p className="page-lede">
+            {id.startsWith("wiki-")
+              ? "This species was referenced by the AI Naturalist. Biblos is fetching its profile from Wikipedia and will cache it for instant access next time."
+              : "Biblos found the indexed species entry and is now assembling taxonomy, images, and readable facts from cached and live sources."}
+          </p>
         </section>
       </div>
     );
@@ -328,6 +336,13 @@ export default function SpeciesDetail() {
                   {videos[currentVideoIndex].type}
                 </span>
                 <h3 className="mt-3 text-xl font-semibold text-white">{videos[currentVideoIndex].title}</h3>
+                {(videos[currentVideoIndex].channelName || videos[currentVideoIndex].views !== undefined) && (
+                  <p className="mt-1 text-xs text-app-soft">
+                    {videos[currentVideoIndex].channelName && `Channel: ${videos[currentVideoIndex].channelName}`}
+                    {videos[currentVideoIndex].channelName && videos[currentVideoIndex].views !== undefined && " • "}
+                    {videos[currentVideoIndex].views !== undefined && `${videos[currentVideoIndex].views.toLocaleString()} views`}
+                  </p>
+                )}
                 <p className="mt-3 text-sm leading-7 text-app-muted">{videos[currentVideoIndex].description}</p>
               </div>
               <div className="mt-4 flex items-center justify-between text-xs text-app-soft/80 border-t border-white/5 pt-3">

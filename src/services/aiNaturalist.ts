@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { animals } from "../data/animals";
 import { ecosystems } from "../data/ecosystems";
 import { flattenTree, treeOfLife } from "../data/treeOfLife";
+import type { Animal } from "../types/animal";
+import { getSpeciesMedia } from "./speciesMedia";
 
 export type NaturalistContextHit = {
   id: string;
@@ -30,54 +32,165 @@ function tokenSet(value: string) {
   return new Set(normalize(value).split(" ").filter(Boolean));
 }
 
-const corpus: NaturalistContextHit[] = [
-  ...animals.map((animal) => ({
-    id: animal.id,
-    title: animal.commonName,
-    kind: "species" as const,
-    score: 0,
-    excerpt: `${animal.commonName} (${animal.scientificName}) • ${animal.conservationStatus} • ${animal.habitat.join(", ")}`,
-    payload: [
-      `Species: ${animal.commonName} (${animal.scientificName})`,
-      `Taxonomy: ${animal.classification.kingdom} > ${animal.classification.phylum} > ${animal.classification.className} > ${animal.classification.order} > ${animal.classification.family} > ${animal.classification.genus} > ${animal.classification.species}`,
-      `Summary: ${animal.shortDescription}`,
-      `Detail: ${animal.detailedDescription}`,
-      `Habitats: ${animal.habitat.join(", ")}`,
-      `Diet: ${animal.diet}`,
-      `Activity: ${animal.activityPattern}`,
-      `Continents: ${animal.continents.join(", ")}`,
-      `Conservation: ${animal.conservationStatus}`,
-      `Facts: ${animal.coolFacts.join(" ")}`,
-    ].join("\n"),
-  })),
-  ...ecosystems.map((ecosystem) => ({
-    id: ecosystem.id,
-    title: ecosystem.title,
-    kind: "biome" as const,
-    score: 0,
-    excerpt: `${ecosystem.title} • ${ecosystem.climate} • ${ecosystem.region}`,
-    payload: [
-      `Biome: ${ecosystem.title}`,
-      `Subtitle: ${ecosystem.subtitle}`,
-      `Climate: ${ecosystem.climate}`,
-      `Region: ${ecosystem.region}`,
-      `Description: ${ecosystem.description}`,
-      `Highlights: ${ecosystem.highlights.join(", ")}`,
-      `Field notes: ${ecosystem.fieldNotes.join(" ")}`,
-      `Habitat keys: ${ecosystem.habitatFilters.join(", ")}`,
-    ].join("\n"),
-  })),
-  ...flattenTree(treeOfLife)
-    .filter((node) => node.id !== "life")
-    .map((node) => ({
-      id: node.id,
-      title: node.label,
-      kind: "taxonomy" as const,
+export type ChatSettings = {
+  model: string;
+  useLocal: boolean;
+  useCached: boolean;
+  useWebSearch: boolean;
+  useImages: boolean;
+  fontSize: "sm" | "base" | "lg" | "xl";
+};
+
+export function getChatSettings(): ChatSettings {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return {
+      model: "llama-3.3-70b-versatile",
+      useLocal: true,
+      useCached: true,
+      useWebSearch: true,
+      useImages: true,
+      fontSize: "base",
+    };
+  }
+  try {
+    const raw = window.localStorage.getItem("biblos.chat-settings");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        model: parsed.model ?? "llama-3.3-70b-versatile",
+        useLocal: parsed.useLocal ?? true,
+        useCached: parsed.useCached ?? true,
+        useWebSearch: parsed.useWebSearch ?? true,
+        useImages: parsed.useImages ?? true,
+        fontSize: parsed.fontSize ?? "base",
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return {
+    model: "llama-3.3-70b-versatile",
+    useLocal: true,
+    useCached: true,
+    useWebSearch: true,
+    useImages: true,
+    fontSize: "base",
+  };
+}
+
+function getDynamicCorpus(settings: ChatSettings): NaturalistContextHit[] {
+  const cachedAnimalsMap = new Map<string, Animal>();
+  if (settings.useCached && typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("biblos.species.")) {
+        try {
+          const cached = JSON.parse(window.localStorage.getItem(key) || "") as Animal;
+          if (cached && cached.id) {
+            cachedAnimalsMap.set(cached.id, cached);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  // Combine base animals with cached animals (cached version overrides static)
+  const allAnimals = settings.useLocal ? [...animals] : [];
+  const combinedAnimals = allAnimals.map(a => cachedAnimalsMap.get(a.id) ?? a);
+  const staticIds = new Set(allAnimals.map(a => a.id));
+  
+  if (settings.useCached) {
+    for (const [id, cached] of cachedAnimalsMap.entries()) {
+      if (!staticIds.has(id)) {
+        combinedAnimals.push(cached);
+      }
+    }
+  }
+
+  return [
+    ...combinedAnimals.map((animal) => ({
+      id: animal.id,
+      title: animal.commonName,
+      kind: "species" as const,
       score: 0,
-      excerpt: `${node.rank} • ${node.description}`,
-      payload: [`Taxon: ${node.label}`, `Rank: ${node.rank}`, `Description: ${node.description}`].join("\n"),
+      excerpt: `${animal.commonName} (${animal.scientificName}) • ${animal.conservationStatus} • ${animal.habitat.join(", ")}`,
+      payload: [
+        `Species: ${animal.commonName} (${animal.scientificName})`,
+        `Taxonomy: ${animal.classification.kingdom} > ${animal.classification.phylum} > ${animal.classification.className} > ${animal.classification.order} > ${animal.classification.family} > ${animal.classification.genus} > ${animal.classification.species}`,
+        `Summary: ${animal.shortDescription}`,
+        `Detail: ${animal.detailedDescription}`,
+        `Habitats: ${animal.habitat.join(", ")}`,
+        `Diet: ${animal.diet}`,
+        `Activity: ${animal.activityPattern}`,
+        `Continents: ${animal.continents.join(", ")}`,
+        `Conservation: ${animal.conservationStatus}`,
+        `Facts: ${animal.coolFacts.join(" ")}`,
+        settings.useImages && animal.images && animal.images.length > 0
+          ? `Images: ${animal.images.join(", ")}`
+          : ""
+      ].filter(Boolean).join("\n"),
     })),
-];
+    ...ecosystems.map((ecosystem) => ({
+      id: ecosystem.id,
+      title: ecosystem.title,
+      kind: "biome" as const,
+      score: 0,
+      excerpt: `${ecosystem.title} • ${ecosystem.climate} • ${ecosystem.region}`,
+      payload: [
+        `Biome: ${ecosystem.title}`,
+        `Subtitle: ${ecosystem.subtitle}`,
+        `Climate: ${ecosystem.climate}`,
+        `Region: ${ecosystem.region}`,
+        `Description: ${ecosystem.description}`,
+        `Highlights: ${ecosystem.highlights.join(", ")}`,
+        `Field notes: ${ecosystem.fieldNotes.join(" ")}`,
+        `Habitat keys: ${ecosystem.habitatFilters.join(", ")}`,
+      ].join("\n"),
+    })),
+    ...flattenTree(treeOfLife)
+      .filter((node) => node.id !== "life")
+      .map((node) => ({
+        id: node.id,
+        title: node.label,
+        kind: "taxonomy" as const,
+        score: 0,
+        excerpt: `${node.rank} • ${node.description}`,
+        payload: [`Taxon: ${node.label}`, `Rank: ${node.rank}`, `Description: ${node.description}`].join("\n"),
+      })),
+  ];
+}
+
+async function searchWikipediaSummary(query: string): Promise<{ title: string; extract: string; pageUrl?: string; thumbnailUrl?: string } | null> {
+  try {
+    // 1. Search Wikipedia for the term
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+    const searchRes = await fetch(searchUrl);
+    if (!searchRes.ok) return null;
+    const searchData = await searchRes.json();
+    const topResult = searchData.query?.search?.[0];
+    if (!topResult) return null;
+
+    const title = topResult.title;
+
+    // 2. Fetch page summary for the top result
+    const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const summaryRes = await fetch(summaryUrl);
+    if (!summaryRes.ok) return null;
+    const summaryData = await summaryRes.json();
+
+    return {
+      title: summaryData.title ?? title,
+      extract: summaryData.extract ?? "",
+      pageUrl: summaryData.content_urls?.desktop?.page,
+      thumbnailUrl: summaryData.thumbnail?.source,
+    };
+  } catch (err) {
+    console.warn("Wikipedia lookup failed:", err);
+    return null;
+  }
+}
 
 function scoreHit(query: string, hit: NaturalistContextHit) {
   const q = normalize(query);
@@ -115,7 +228,9 @@ function scoreHit(query: string, hit: NaturalistContextHit) {
 }
 
 export function retrieveNaturalistContext(query: string, limit = 6) {
-  return corpus
+  const settings = getChatSettings();
+  const dynamicCorpus = getDynamicCorpus(settings);
+  return dynamicCorpus
     .map((hit) => ({ ...hit, score: scoreHit(query, hit) }))
     .filter((hit) => hit.score > 0)
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
@@ -129,19 +244,83 @@ export async function askNaturalist(params: {
   model?: string;
   extraContext?: string;
 }) {
-  const contextHits = retrieveNaturalistContext(params.question);
+  const settings = getChatSettings();
+  const corpusHits = retrieveNaturalistContext(params.question);
+  let contextHits = corpusHits;
+
+  // Check if we have any high-scoring species match in our database
+  const hasHighScoringSpecies = corpusHits.some(hit => hit.kind === "species" && hit.score >= 20);
+
+  if (settings.useWebSearch && !hasHighScoringSpecies) {
+    // Attempt online search fallback
+    const cleanQuery = params.question
+      .replace(/^(what is|tell me about|who is|explain|what are|search|find|does anyone know about|tell me about the)\s+/i, "")
+      .replace(/\?+$/, "")
+      .trim();
+
+    if (cleanQuery.length > 2) {
+      const wikiData = await searchWikipediaSummary(cleanQuery);
+      if (wikiData && wikiData.extract) {
+        const wikiHit: NaturalistContextHit = {
+          id: `wiki-${normalize(wikiData.title)}`,
+          title: wikiData.title,
+          kind: "species",
+          score: 50,
+          excerpt: wikiData.extract.slice(0, 150) + "...",
+          payload: `Source: Wikipedia (${wikiData.pageUrl || ""})\nTopic: ${wikiData.title}\nSummary: ${wikiData.extract}${
+            settings.useImages && wikiData.thumbnailUrl ? `\nImage: ${wikiData.thumbnailUrl}` : ""
+          }`,
+        };
+        // Put Wikipedia search hit first in the context
+        contextHits = [wikiHit, ...contextHits];
+      }
+    }
+  }
+
+  // For any species hits in the context, dynamically resolve their primary image and append to payload if they don't have one
+  if (settings.useImages) {
+    await Promise.all(
+      contextHits.map(async (hit) => {
+        if (hit.kind === "species" && !hit.payload.includes("Images:") && !hit.payload.includes("Image:")) {
+          const animal = animals.find(a => a.id === hit.id) ||
+                         animals.find(a => a.commonName.toLowerCase() === hit.title.toLowerCase());
+          if (animal) {
+            try {
+              const mediaBundle = await getSpeciesMedia(animal, "primary");
+              if (mediaBundle && mediaBundle.primary) {
+                hit.payload = `${hit.payload}\nImages: ${mediaBundle.primary.url}`;
+              }
+            } catch (err) {
+              console.warn("Failed to retrieve media for", animal.commonName, err);
+            }
+          }
+        }
+      })
+    );
+  }
+
+  // Instruct LLM to render images from the context, one per species/subject discussed
+  const imageInstruction = settings.useImages
+    ? "System Instruction: If the retrieved context contains valid image URLs (e.g. 'Image: https://...' or 'Images: https://...'), you MUST embed an image for EACH species or subject you discuss that has an available image. Place each image directly under that species' heading section using markdown: ![Species Name](URL). If multiple species are discussed, embed one image per species — do NOT embed a single combined image. CRITICAL FILTERING: Only embed an image if it is directly relevant to the species/subject being described. Do not embed broken, missing, or unrelated images. Do not hallucinate external image links — only use URLs explicitly found in the context."
+    : "System Instruction: DO NOT display or embed any images in your response.";
+
+  const followupInstruction = "System Instruction: At the very end of your response, you must propose exactly 3 natural, specific follow-up questions that the user might want to ask next based on your answer. Format them exactly like this:\n[FOLLOWUP]\n1. First question?\n2. Second question?\n3. Third question?";
+
   let context = contextHits.map((hit) => `[${hit.kind.toUpperCase()}] ${hit.payload}`).join("\n\n");
+  context = `${imageInstruction}\n\n${followupInstruction}\n\n${context}`;
 
   if (params.extraContext) {
     context = `${params.extraContext}\n\n${context}`;
   }
+
+  const selectedModel = params.model?.trim() || settings.model.trim();
 
   const answer = await invoke<string>("ask_ai_naturalist", {
     question: params.question,
     history: params.history,
     context,
     groqApiKey: params.apiKey?.trim() || null,
-    model: params.model?.trim() || null,
+    model: selectedModel || null,
   });
 
   return { answer, contextHits };
