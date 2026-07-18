@@ -11,7 +11,7 @@ export function EcosystemCard({ ecosystem }: { ecosystem: Ecosystem }) {
 
   return (
     <Link
-      to={`/ecosystems?ecosystem=${ecosystem.id}`}
+      to={`/ecosystems/${ecosystem.id}`}
       className="page-card interactive-card group flex h-full flex-col overflow-hidden rounded-[1.45rem] hover:no-underline text-app-text cursor-pointer"
     >
       <div className="relative h-44 overflow-hidden border-b border-white/8">
