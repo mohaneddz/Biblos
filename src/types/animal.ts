@@ -26,6 +26,8 @@ export type SpeciesVideo = {
   type: string;
   description: string;
   youtubeId: string;
+  views?: number;
+  channelName?: string;
 };
 
 export type Animal = {

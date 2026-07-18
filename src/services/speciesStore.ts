@@ -192,7 +192,8 @@ export async function lookupSpeciesAndStore(query: string, limit = 50) {
 export async function hydrateSpeciesProfile(id: string, forceRefresh = false) {
   await initializeSpeciesStore();
 
-  if (!id.startsWith("gbif-") && animalMap.has(id)) {
+  // 1. Static local animal
+  if (!id.startsWith("gbif-") && !id.startsWith("wiki-") && animalMap.has(id)) {
     return {
       id,
       gbif_taxon_key: animalMap.get(id)?.gbifTaxonKey ?? 0,
@@ -200,6 +201,79 @@ export async function hydrateSpeciesProfile(id: string, forceRefresh = false) {
       cached: true,
       partial: false,
     } satisfies HydratedProfileResponse;
+  }
+
+  // 2. Wikipedia-sourced species (id = "wiki-<slug>")
+  if (id.startsWith("wiki-")) {
+    // Check cache first unless forced
+    const cached = getCachedSpecies(id);
+    if (cached && !forceRefresh) {
+      return { id, gbif_taxon_key: 0, animal: cached, cached: true, partial: cached.partial ?? true } satisfies HydratedProfileResponse;
+    }
+
+    // Derive a human-readable name from the slug: "wiki-killer-whale" → "killer whale"
+    const slug = id.replace(/^wiki-/, "").replace(/-/g, " ");
+
+    try {
+      // Fetch Wikipedia REST summary
+      const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`;
+      const res = await fetch(summaryUrl);
+      if (!res.ok) throw new Error(`Wikipedia returned ${res.status} for "${slug}"`);
+      const data = await res.json() as {
+        title?: string;
+        description?: string;
+        extract?: string;
+        thumbnail?: { source?: string };
+        content_urls?: { desktop?: { page?: string } };
+      };
+
+      const commonName = data.title ?? slug;
+      const description = data.description ?? "";
+      const extract = data.extract ?? "";
+      const thumbnailUrl = data.thumbnail?.source ?? null;
+      const wikiUrl = data.content_urls?.desktop?.page ?? null;
+
+      const wikiAnimal: Animal = {
+        id,
+        gbifTaxonKey: undefined,
+        commonName,
+        scientificName: description || commonName,
+        averageLifespanYears: null,
+        shortDescription: extract.slice(0, 300) || `Wikipedia entry for ${commonName}.`,
+        detailedDescription: extract || `No detailed description available for ${commonName}.`,
+        coolFacts: [],
+        classification: {
+          kingdom: "Animalia",
+          phylum: "Unknown",
+          className: "Unknown",
+          order: "Unknown",
+          family: "Unknown",
+          genus: "Unknown",
+          species: description || commonName,
+        },
+        habitat: [],
+        diet: "Unknown",
+        activityPattern: "Unknown",
+        continents: ["Unknown"],
+        conservationStatus: "Unknown",
+        size: {},
+        weightKg: null,
+        images: thumbnailUrl ? [thumbnailUrl] : [],
+        has3DModel: false,
+        sourceUrls: wikiUrl ? [wikiUrl] : [],
+        lastFetchedAt: new Date().toISOString(),
+        partial: true,
+      };
+
+      // Persist to localStorage so subsequent navigations are instant
+      const { setCachedSpecies } = await import("./cache");
+      setCachedSpecies(wikiAnimal);
+
+      return { id, gbif_taxon_key: 0, animal: wikiAnimal, cached: false, partial: true } satisfies HydratedProfileResponse;
+    } catch (err) {
+      reportError(`Unable to hydrate Wikipedia species profile for ID "${id}"`, err);
+      throw err;
+    }
   }
 
   let response: HydratedProfileResponse;

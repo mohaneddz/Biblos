@@ -84,20 +84,28 @@ function scoreAnimal(animal: Animal, query: string) {
 
 export function searchAnimals(animals: Animal[], filters: AnimalSearchFilters) {
   const query = normalize(filters.query);
+  const habitatFilter = filters.habitat ? normalize(filters.habitat) : "";
+  const dietFilter = filters.diet ? normalize(filters.diet) : "";
+  const classFilter = filters.className ? normalize(filters.className) : "";
 
   return animals
     .filter((animal) => {
       if (query && !animalHaystack(animal).includes(query)) {
         return false;
       }
-      if (filters.className && animal.classification.className !== filters.className) {
-        return false;
+      // Fuzzy class match: "mammal" matches "Mammalia"
+      if (classFilter) {
+        const animalClass = normalize(animal.classification.className);
+        if (!animalClass.includes(classFilter) && !classFilter.includes(animalClass)) return false;
       }
-      if (filters.habitat && !animal.habitat.includes(filters.habitat)) {
-        return false;
+      // Fuzzy habitat match: "forest" matches "Tropical rainforest canopy"
+      if (habitatFilter) {
+        const habitatHaystack = animal.habitat.map(normalize).join(" ");
+        if (!habitatHaystack.includes(habitatFilter)) return false;
       }
-      if (filters.diet && animal.diet !== filters.diet) {
-        return false;
+      // Fuzzy diet match: "herb" matches "Herbivore"
+      if (dietFilter) {
+        if (!normalize(animal.diet).includes(dietFilter)) return false;
       }
       if (filters.activityPattern && animal.activityPattern !== filters.activityPattern) {
         return false;

@@ -1,8 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { EcosystemCard } from "../components/EcosystemCard";
 import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
-import { ecosystems, ecosystemsForContinent, getEcosystemById } from "../data/ecosystems";
 import type { Continent } from "../types/animal";
 import { BinocularsIcon, BirdIcon, GlobeGridIcon, LeafClusterIcon, MammalIcon, MountainIcon, RiverIcon } from "../components/icons";
 
@@ -27,9 +25,7 @@ const routeCards = [
 export default function Explorer() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedContinent = (searchParams.get("continent") as Continent | null) ?? "Africa";
-  const selectedEcosystem = getEcosystemById(searchParams.get("ecosystem") ?? "") ?? ecosystemsForContinent(selectedContinent)[0] ?? ecosystems[0];
   const continentSpecies = animals.filter((animal) => animal.continents.includes(selectedContinent));
-  const continentBiomes = ecosystemsForContinent(selectedContinent);
 
   return (
     <div className="page-frame">
@@ -38,27 +34,19 @@ export default function Explorer() {
           <div>
             <h1 className="page-title">Explorer</h1>
             <p className="page-lede">
-              Explorer is now the organic discovery surface for Biblos: traits, regions, and biomes live together here, and the old atlas flow has been folded into this page instead of split into a separate route.
+              Explorer is the organic discovery surface for Biblos: traits and regions live together here, and the atlas browsing flow is integrated directly into this page.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link to="/species" className="primary-button text-sm">
                 Open full directory
               </Link>
-              <Link to="/ecosystems" className="ghost-button text-sm">
-                Open full biome library
-              </Link>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
               <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Routes</span>
               <p className="mt-3 text-3xl font-semibold text-white">{routeCards.length}</p>
               <p className="mt-2 text-sm leading-6 text-app-muted">Trait-led entry points</p>
-            </div>
-            <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
-              <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Biomes</span>
-              <p className="mt-3 text-3xl font-semibold text-white">{ecosystems.length}</p>
-              <p className="mt-2 text-sm leading-6 text-app-muted">Real-image ecosystem records</p>
             </div>
             <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
               <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Regions</span>
@@ -115,7 +103,7 @@ export default function Explorer() {
             <button
               key={continent}
               type="button"
-              onClick={() => setSearchParams(new URLSearchParams({ continent, ecosystem: ecosystemsForContinent(continent)[0]?.id ?? "" }))}
+              onClick={() => setSearchParams(new URLSearchParams({ continent }))}
               className={[
                 "interactive-card rounded-[1.3rem] border px-4 py-4 text-left cursor-pointer",
                 continent === selectedContinent ? "border-app-accent/35 bg-app-accent/9" : "border-white/8 bg-white/[0.03]",
@@ -132,8 +120,8 @@ export default function Explorer() {
           ))}
         </div>
 
-        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-5">
+        <div className="mt-6">
+          <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-5 w-full">
             <div className="flex items-center gap-3 text-app-accent">
               <BirdIcon className="h-5 w-5" />
               <span className="text-xs uppercase tracking-[0.22em]">Current Region</span>
@@ -141,7 +129,7 @@ export default function Explorer() {
             <h3 className="mt-3 text-3xl font-semibold text-white">{selectedContinent}</h3>
             <p className="mt-3 text-sm leading-7 text-app-muted">Species in this region from the current Biblos directory:</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {continentSpecies.slice(0, 12).map((animal) => (
+              {continentSpecies.slice(0, 24).map((animal) => (
                 <Link key={animal.id} to={`/species/${animal.id}`} className="tag-chip interactive-chip">
                   {animal.commonName}
                 </Link>
@@ -149,66 +137,6 @@ export default function Explorer() {
               {continentSpecies.length === 0 ? <span className="tag-chip">No local records yet</span> : null}
             </div>
           </div>
-
-          {selectedEcosystem ? (
-            <div className="rounded-[1.5rem] border border-white/8 bg-black/18 p-5">
-              <div className="flex items-center gap-3 text-app-accent">
-                <LeafClusterIcon className="h-5 w-5" />
-                <span className="text-xs uppercase tracking-[0.22em]">Biome Focus</span>
-              </div>
-              <h3 className="mt-3 text-3xl font-semibold text-white">{selectedEcosystem.title}</h3>
-              <p className="mt-2 text-sm leading-7 text-app-muted">{selectedEcosystem.description}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {selectedEcosystem.highlights.map((highlight) => (
-                  <span key={highlight} className="tag-chip">
-                    {highlight}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Link to={`/species?habitat=${encodeURIComponent(selectedEcosystem.habitatFilters[0] ?? "")}&continent=${encodeURIComponent(selectedContinent)}`} className="primary-button text-sm">
-                  Explore this biome
-                </Link>
-                <Link to={`/ecosystems?ecosystem=${encodeURIComponent(selectedEcosystem.id)}`} className="ghost-button text-sm">
-                  Open biome record
-                </Link>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {continentBiomes.slice(0, 6).map((ecosystem) => (
-            <button
-              key={ecosystem.id}
-              type="button"
-              onClick={() => setSearchParams(new URLSearchParams({ continent: selectedContinent, ecosystem: ecosystem.id }))}
-              className={[
-                "interactive-card rounded-[1.2rem] border px-4 py-4 text-left cursor-pointer",
-                ecosystem.id === selectedEcosystem?.id ? "border-app-accent/35 bg-app-accent/9" : "border-white/8 bg-white/[0.03]",
-              ].join(" ")}
-            >
-              <p className="text-sm font-semibold text-white">{ecosystem.title}</p>
-              <p className="mt-2 text-sm leading-6 text-app-muted">{ecosystem.subtitle}</p>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="page-section-title">Biome Field Guide</h2>
-            <p className="mt-2 text-sm leading-7 text-app-muted">A smaller three-column scanline into the full ecosystem library.</p>
-          </div>
-          <Link to="/ecosystems" className="ghost-button text-sm">
-            Open all biomes
-          </Link>
-        </div>
-        <div className="page-grid page-grid-3">
-          {ecosystems.slice(0, 9).map((ecosystem) => (
-            <EcosystemCard key={ecosystem.id} ecosystem={ecosystem} />
-          ))}
         </div>
       </section>
     </div>
