@@ -1,99 +1,170 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { EcosystemCard } from "../components/EcosystemCard";
 import { GlobeGridIcon, LeafClusterIcon } from "../components/icons";
-import { ecosystems, getEcosystemById, getEcosystemSpecies } from "../data/ecosystems";
-import { useWikipediaSummaries } from "../services/wikipedia";
+import { ecosystems } from "../data/ecosystems";
+
+const BIOME_TYPES = [
+  { label: "All", value: "" },
+  { label: "Terrestrial", value: "terrestrial" },
+  { label: "Aquatic", value: "aquatic" },
+  { label: "Coastal", value: "coastal" },
+  { label: "Polar", value: "polar" },
+  { label: "Arid", value: "arid" },
+];
+
+const TERRESTRIAL_IDS = new Set(["african-savanna", "tropical-rainforest", "temperate-forest", "taiga", "alpine", "desert", "mediterranean-scrub"]);
+const AQUATIC_IDS = new Set(["freshwater-wetland", "river-floodplain", "open-ocean", "deep-ocean", "kelp-forest", "seagrass-meadow"]);
+const COASTAL_IDS = new Set(["mangrove", "estuary", "coral-reef", "rocky-intertidal"]);
+const POLAR_IDS = new Set(["arctic-tundra", "polar-sea-ice"]);
+const ARID_IDS = new Set(["desert", "mediterranean-scrub"]);
+
+function normalize(s: string) {
+  return s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
+}
 
 export default function Ecosystems() {
-  const [searchParams] = useSearchParams();
-  const selected = getEcosystemById(searchParams.get("ecosystem") ?? "") ?? ecosystems[0];
-  const summaries = useWikipediaSummaries([selected.articleTitle]);
-  const selectedSummary = summaries[selected.articleTitle];
+  const [query, setQuery] = useState("");
+  const [biomeType, setBiomeType] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = normalize(query);
+    return ecosystems.filter((eco) => {
+      if (biomeType === "terrestrial" && !TERRESTRIAL_IDS.has(eco.id)) return false;
+      if (biomeType === "aquatic" && !AQUATIC_IDS.has(eco.id)) return false;
+      if (biomeType === "coastal" && !COASTAL_IDS.has(eco.id)) return false;
+      if (biomeType === "polar" && !POLAR_IDS.has(eco.id)) return false;
+      if (biomeType === "arid" && !ARID_IDS.has(eco.id)) return false;
+      if (!q) return true;
+      const hay = normalize([eco.title, eco.subtitle, eco.region, eco.climate, eco.highlights.join(" "), eco.fieldNotes.join(" ")].join(" "));
+      return hay.includes(q);
+    });
+  }, [query, biomeType]);
 
   return (
     <div className="page-frame">
+      {/* Header */}
       <section className="page-card rounded-[1.85rem] p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="page-title">Ecosystems</h1>
             <p className="page-lede">
-              The biome library now uses real Wikipedia-backed imagery, denser three-column cards, and a much wider spread of terrestrial, freshwater, coastal, and pelagic environments.
+              Explore every major biome on Earth — from deep-sea hydrothermal vents to Arctic tundra. Click any card for detailed stats, species lists, and an interactive world heatmap.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link to="/explorer" className="ghost-button text-sm">
               Open explorer atlas
             </Link>
-            <Link to={`/species?habitat=${encodeURIComponent(selected.habitatFilters[0] ?? "")}`} className="primary-button text-sm">
-              Explore selected biome
-            </Link>
+          </div>
+        </div>
+
+        {/* Search + filter row */}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search biomes — reef, tundra, forest, savanna…"
+              className="w-full rounded-[1rem] border border-white/8 bg-black/20 py-3 pl-11 pr-4 text-sm text-app-text placeholder:text-app-muted focus:border-app-accent/40 focus:outline-none transition"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-app-muted hover:text-app-text transition"
+                aria-label="Clear search"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Biome type chips */}
+          <div className="flex flex-wrap gap-2">
+            {BIOME_TYPES.map((bt) => (
+              <button
+                key={bt.value}
+                type="button"
+                onClick={() => setBiomeType(bt.value)}
+                className={[
+                  "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition",
+                  biomeType === bt.value
+                    ? "bg-app-accent text-white"
+                    : "border border-white/8 bg-white/[0.03] text-app-muted hover:border-app-accent/30 hover:text-app-text",
+                ].join(" ")}
+              >
+                {bt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Result count */}
+        <div className="mt-3 flex items-center gap-3">
+          <span className="tag-chip">{filtered.length} biome{filtered.length !== 1 ? "s" : ""}</span>
+          {(query || biomeType) && (
+            <button
+              type="button"
+              onClick={() => { setQuery(""); setBiomeType(""); }}
+              className="text-xs text-app-muted hover:text-app-accent transition"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Stats row */}
+      <section className="grid gap-4 sm:grid-cols-3">
+        <div className="page-card rounded-[1.4rem] p-5 flex items-center gap-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-app-accent/12 text-app-accent">
+            <GlobeGridIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-2xl font-semibold text-white">{ecosystems.length}</p>
+            <p className="text-xs text-app-muted mt-0.5 uppercase tracking-[0.14em]">Total biomes</p>
+          </div>
+        </div>
+        <div className="page-card rounded-[1.4rem] p-5 flex items-center gap-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-app-accent/12 text-app-accent">
+            <LeafClusterIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-2xl font-semibold text-white">{[...new Set(ecosystems.flatMap((e) => e.continents))].length}</p>
+            <p className="text-xs text-app-muted mt-0.5 uppercase tracking-[0.14em]">Continents covered</p>
+          </div>
+        </div>
+        <div className="page-card rounded-[1.4rem] p-5 flex items-center gap-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-app-accent/12 text-app-accent">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <div>
+            <p className="text-2xl font-semibold text-white">{[...new Set(ecosystems.flatMap((e) => e.habitatFilters))].length}</p>
+            <p className="text-xs text-app-muted mt-0.5 uppercase tracking-[0.14em]">Distinct habitat tags</p>
           </div>
         </div>
       </section>
 
-      <section className="page-card overflow-hidden rounded-[1.8rem]">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
-          <div className="relative min-h-[22rem] overflow-hidden border-b border-white/8 xl:border-b-0 xl:border-r">
-            {selectedSummary?.thumbnailUrl ? <img src={selectedSummary.thumbnailUrl} alt={selected.title} className="h-full w-full object-cover" /> : null}
-            <div className="media-vignette" />
-            <div className="absolute bottom-0 left-0 right-0 p-6">
-              <span className="text-xs uppercase tracking-[0.24em] text-app-accent">{selected.region}</span>
-              <h2 className="mt-2 text-4xl font-semibold text-white">{selected.title}</h2>
-              <p className="mt-3 max-w-[38rem] text-sm leading-7 text-white/82">{selected.subtitle}</p>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="grid gap-3">
-              <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-3 text-app-accent">
-                  <LeafClusterIcon className="h-5 w-5" />
-                  <span className="text-xs uppercase tracking-[0.24em]">Climate + Structure</span>
-                </div>
-                <p className="mt-3 text-sm leading-7 text-app-text">{selected.climate}</p>
-                <p className="mt-2 text-sm leading-7 text-app-muted">{selected.description}</p>
-              </div>
-              <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-3 text-app-accent">
-                  <GlobeGridIcon className="h-5 w-5" />
-                  <span className="text-xs uppercase tracking-[0.24em]">Field Notes</span>
-                </div>
-                <ul className="mt-3 grid gap-2 text-sm leading-7 text-app-muted">
-                  {selected.fieldNotes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              {selected.highlights.map((highlight) => (
-                <span key={highlight} className="tag-chip">
-                  {highlight}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link to={`/species?habitat=${encodeURIComponent(selected.habitatFilters[0] ?? "")}`} className="primary-button text-sm">
-                Open matching species
-              </Link>
-              <Link to={`/explorer?continent=${encodeURIComponent(selected.continents[0] ?? "Africa")}&ecosystem=${encodeURIComponent(selected.id)}`} className="ghost-button text-sm">
-                Open regional route
-              </Link>
-            </div>
-
-            <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-black/18 p-4 text-sm leading-7 text-app-muted">
-              {getEcosystemSpecies(selected).length} local Biblos species currently intersect this biome profile.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="page-grid page-grid-3">
-        {ecosystems.map((ecosystem) => (
-          <EcosystemCard key={ecosystem.id} ecosystem={ecosystem} />
-        ))}
-      </section>
+      {/* Grid */}
+      {filtered.length > 0 ? (
+        <section className="page-grid page-grid-3">
+          {filtered.map((ecosystem) => (
+            <EcosystemCard key={ecosystem.id} ecosystem={ecosystem} />
+          ))}
+        </section>
+      ) : (
+        <section className="page-card rounded-[1.75rem] p-12 text-center">
+          <p className="text-2xl font-semibold text-white mb-2">No biomes found</p>
+          <p className="text-sm text-app-muted">Try a different keyword or clear your filters.</p>
+        </section>
+      )}
     </div>
   );
 }

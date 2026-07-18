@@ -7,6 +7,7 @@ import { animals } from "../data/animals";
 import { getBookmarkedSpecies, getFavorites, getAllCachedSpecies, getHiddenSpecies } from "../services/cache";
 import { searchAnimals } from "../services/searchAnimals";
 import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, type SpeciesSearchHit } from "../services/speciesStore";
+import { discoverSpeciesByFilters } from "../services/filterDiscovery";
 import type { Animal, Continent } from "../types/animal";
 import { RefreshIcon, AtlasIcon, CompassIcon, CopyIcon } from "../components/icons";
 import { reportError } from "../services/errorReporter";
@@ -49,6 +50,8 @@ export default function Species() {
   const [indexedHits, setIndexedHits] = useState<SpeciesSearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [filterDiscoveryHits, setFilterDiscoveryHits] = useState<SpeciesSearchHit[]>([]);
+  const [filterDiscoveryLoading, setFilterDiscoveryLoading] = useState(false);
 
 
   const favorites = useMemo(() => getFavorites(), [storageVersion]);
@@ -89,6 +92,7 @@ export default function Species() {
 
   const browseResults = useMemo(() => searchAnimals(allAvailableAnimals, filters), [allAvailableAnimals, filters]);
   const indexedResults = useMemo(() => indexedHits.map(previewAnimalFromHit), [indexedHits]);
+  const filterDiscoveryResults = useMemo(() => filterDiscoveryHits.map(previewAnimalFromHit), [filterDiscoveryHits]);
 
   // browseResults (local + cached animals) are always available instantly.
   // indexedResults (GBIF placeholders) are merged in as they arrive from the async search.
@@ -96,40 +100,41 @@ export default function Species() {
   // immediately on every keystroke, and GBIF hits appear on top once fetched.
   const results = useMemo(() => {
     let rawResults: Animal[] = [];
-    if (useIndexedSearch) {
-      const seenIds = new Set<string>();
-      const seenNames = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
 
-      // 1. Add browseResults first (fully detailed static / cached entries) — these are
-      //    available synchronously on every render, so the grid is never gated on network.
+    if (useIndexedSearch) {
+      // 1. Add browseResults first (fully detailed static / cached entries)
       for (const animal of browseResults) {
         rawResults.push(animal);
         seenIds.add(animal.id);
         seenNames.add(animal.scientificName.toLowerCase());
-        if (animal.commonName) {
-          seenNames.add(animal.commonName.toLowerCase());
-        }
+        if (animal.commonName) seenNames.add(animal.commonName.toLowerCase());
       }
 
-      // 2. Add indexedResults (placeholders) if not already represented.
-      // We also deduplicate by common name: if we already have any animal with the
-      // same vernacular name (e.g. "aye aye" genus AND "aye aye" species), keep only
-      // the one we already added (browse results win; within indexed, first/highest wins).
+      // 2. Add indexedResults (placeholders) if not already represented
       for (const animal of indexedResults) {
         const sciLower = animal.scientificName.toLowerCase();
         const comLower = animal.commonName.toLowerCase();
-        // Skip if this exact record is already seen, OR if we already have a different
-        // record with the same common name (prevents genus/family/species triplicates).
-        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) {
-          continue;
-        }
+        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
         rawResults.push(animal);
         seenIds.add(animal.id);
         seenNames.add(sciLower);
         seenNames.add(comLower);
       }
 
-      // 3. Sort merged results by unified relevance score
+      // 3. Add filter-discovery results (AI-suggested from filter criteria)
+      for (const animal of filterDiscoveryResults) {
+        const sciLower = animal.scientificName.toLowerCase();
+        const comLower = animal.commonName.toLowerCase();
+        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
+        rawResults.push(animal);
+        seenIds.add(animal.id);
+        seenNames.add(sciLower);
+        seenNames.add(comLower);
+      }
+
+      // 4. Sort merged results by unified relevance score
       const q = filters.query.trim().toLowerCase();
       if (q) {
         rawResults.sort((a, b) => {
@@ -140,19 +145,27 @@ export default function Species() {
         });
       }
     } else {
-      rawResults = browseResults;
+      // Browse mode: start from local matches
+      for (const animal of browseResults) {
+        rawResults.push(animal);
+        seenIds.add(animal.id);
+        seenNames.add(animal.scientificName.toLowerCase());
+        if (animal.commonName) seenNames.add(animal.commonName.toLowerCase());
+      }
+      // Merge filter discovery hits that aren't already present
+      for (const animal of filterDiscoveryResults) {
+        const sciLower = animal.scientificName.toLowerCase();
+        const comLower = animal.commonName.toLowerCase();
+        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
+        rawResults.push(animal);
+        seenIds.add(animal.id);
+        seenNames.add(sciLower);
+        seenNames.add(comLower);
+      }
     }
 
-    return rawResults.filter((animal) => {
-      if (filters.className && animal.classification.className !== filters.className) return false;
-      if (filters.habitat && !animal.habitat.includes(filters.habitat)) return false;
-      if (filters.diet && animal.diet !== filters.diet) return false;
-      if (filters.activityPattern && animal.activityPattern !== filters.activityPattern) return false;
-      if (filters.conservationStatus && animal.conservationStatus !== filters.conservationStatus) return false;
-      if (filters.continent && !animal.continents.includes(filters.continent)) return false;
-      return true;
-    });
-  }, [useIndexedSearch, indexedResults, browseResults, filters]);
+    return rawResults;
+  }, [useIndexedSearch, indexedResults, filterDiscoveryResults, browseResults, filters]);
 
   const effectiveQuery = queryDraft.trim() || filters.query.trim();
   const typingAhead = queryDraft !== filters.query;
@@ -258,6 +271,34 @@ export default function Species() {
     window.addEventListener("biblos-cache-updated", handler);
     return () => window.removeEventListener("biblos-cache-updated", handler);
   }, []);
+
+  // Filter-driven AI discovery: when a non-text filter is active and local results are sparse
+  const hasNonQueryFilter = !!(filters.className || filters.habitat || filters.diet || filters.activityPattern || filters.conservationStatus || filters.continent);
+  useEffect(() => {
+    if (!hasNonQueryFilter) {
+      setFilterDiscoveryHits([]);
+      return;
+    }
+    // Only trigger discovery when we have very few local matches
+    if (browseResults.length >= 5) return;
+
+    let active = true;
+    setFilterDiscoveryLoading(true);
+    void discoverSpeciesByFilters({
+      className: filters.className || undefined,
+      habitat: filters.habitat || undefined,
+      diet: filters.diet || undefined,
+      activityPattern: filters.activityPattern || undefined,
+      conservationStatus: filters.conservationStatus || undefined,
+      continent: filters.continent || undefined,
+    }).then((hits) => {
+      if (!active) return;
+      setFilterDiscoveryHits(hits);
+    }).finally(() => {
+      if (active) setFilterDiscoveryLoading(false);
+    });
+    return () => { active = false; };
+  }, [filters.className, filters.habitat, filters.diet, filters.activityPattern, filters.conservationStatus, filters.continent, hasNonQueryFilter]);
 
 
 
@@ -383,7 +424,7 @@ export default function Species() {
           ))}
         </div>
 
-        {useIndexedSearch || searchLoading || lookupLoading ? (
+        {useIndexedSearch || searchLoading || lookupLoading || filterDiscoveryLoading ? (
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {indexedHits.slice(0, 6).map((hit) => (
               <Link key={hit.id} to={`/species/${hit.id}`} className="tag-chip interactive-chip">
@@ -410,11 +451,25 @@ export default function Species() {
                 <span>Looking up GBIF</span>
               </span>
             ) : null}
+            {filterDiscoveryLoading ? (
+              <span className="loading-chip tag-chip">
+                <span className="spinner-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span>Discovering via AI…</span>
+              </span>
+            ) : filterDiscoveryHits.length > 0 && hasNonQueryFilter ? (
+              <span className="tag-chip text-app-accent border-app-accent/25">
+                +{filterDiscoveryHits.length} AI-discovered
+              </span>
+            ) : null}
           </div>
         ) : null}
       </section>
 
-      {(searchLoading || lookupLoading) ? (
+      {(searchLoading || lookupLoading || filterDiscoveryLoading) ? (
         <div className="relative h-1 w-full bg-white/5 rounded-full overflow-hidden mt-5 mb-3">
           <div className="absolute top-0 bottom-0 bg-[linear-gradient(90deg,var(--app-accent),#7e8364)] rounded-full animate-progress-slide" />
         </div>
