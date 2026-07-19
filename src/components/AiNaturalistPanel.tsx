@@ -134,7 +134,7 @@ export function AiNaturalistPanel({
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history]);
+  }, [history, busy]);
 
   const matchedAnimal = useMemo(() => {
     if (!speciesName) return null;
@@ -195,8 +195,10 @@ export function AiNaturalistPanel({
       return;
     }
 
+    const previousPrompt = prompt;
     setBusy(true);
     setError("");
+    setPrompt("");
     setActiveFollowups([]);
     setHistory((current) => [...current, { role: "user", content: clean }]);
 
@@ -225,9 +227,10 @@ export function AiNaturalistPanel({
         },
       ]);
       setActiveFollowups(parsed.followups);
-      setPrompt("");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to reach AI Naturalist.");
+      setPrompt(previousPrompt);
+      setHistory((current) => current.slice(0, -1));
     } finally {
       setBusy(false);
     }
@@ -440,6 +443,20 @@ export function AiNaturalistPanel({
                   </div>
                 </div>
               ))}
+              {busy && (
+                <div className="flex flex-col items-start animate-fade-in">
+                  <div className="max-w-[85%] rounded-[1.3rem] p-4 text-sm leading-6 border border-app-accent/15 bg-app-accent/8 text-app-text rounded-tl-none">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-app-soft block mb-1.5 select-none">
+                      AI Naturalist
+                    </span>
+                    <div className="flex items-center gap-1.5 py-2 px-1">
+                      <span className="h-2 w-2 rounded-full bg-app-accent animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-app-accent animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-app-accent animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={chatEndRef} />
             </div>
           )}
@@ -471,12 +488,15 @@ export function AiNaturalistPanel({
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  void submit(prompt);
+                  if (!busy) {
+                    void submit(prompt);
+                  }
                 }
               }}
-              placeholder="Ask about an animal, a branch of the tree, a biome, or compare species..."
+              disabled={busy}
+              placeholder={busy ? "AI Naturalist is thinking..." : "Ask about an animal, a branch of the tree, a biome, or compare species..."}
               rows={1}
-              className="w-full rounded-[1.25rem] border border-white/8 bg-black/20 pl-4 pr-32 py-3.5 text-sm text-app-text placeholder:text-app-muted focus:outline-none focus:border-app-accent/25 transition resize-none min-h-[3rem] max-h-32"
+              className="w-full rounded-[1.25rem] border border-white/8 bg-black/20 pl-4 pr-32 py-3.5 text-sm text-app-text placeholder:text-app-muted focus:outline-none focus:border-app-accent/25 transition resize-none min-h-[3rem] max-h-32 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
               {prompt.trim().length > 0 && (
