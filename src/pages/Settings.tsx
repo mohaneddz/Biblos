@@ -3,6 +3,7 @@ import { clearSpeciesCache, clearLookupSpeciesCache, clearLibraryData, factoryRe
 import type { AppSettings } from "../types/animal";
 import { confirmService } from "../services/confirmService";
 import { BrainSparkIcon, DatabaseIcon, GlobeGridIcon, KeyIcon, SettingsIcon, TuneIcon } from "../components/icons";
+import { PageHeader } from "../components/PageHeader";
 
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings>(() => getSettings());
@@ -26,10 +27,11 @@ export default function Settings() {
 
   return (
     <div className="page-frame">
-      <section className="page-card rounded-[1.85rem] p-6">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-lede">Settings now manages data mode, Groq-backed AI access, media source behavior, and the local cache footprint instead of acting as a placeholder panel.</p>
-      </section>
+      <PageHeader
+        title="Settings"
+        description="Settings now manages data mode, Groq-backed AI access, media source behavior, and the local cache footprint instead of acting as a placeholder panel."
+        storageKey="settings"
+      />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
         <div className="grid gap-4">

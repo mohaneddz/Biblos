@@ -27,6 +27,15 @@ import {
   PlayIcon,
 } from "../components/icons";
 
+function hasUnknownClassification(animal: Animal | null): boolean {
+  if (!animal || !animal.classification) return true;
+  const c = animal.classification;
+  const fields = [c.kingdom, c.phylum, c.className, c.order, c.family, c.genus, c.species];
+  return fields.some(
+    (f) => !f || f.toLowerCase().trim() === "unknown" || f.toLowerCase().trim() === "n/a"
+  );
+}
+
 export default function SpeciesDetail() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
@@ -58,12 +67,14 @@ export default function SpeciesDetail() {
     if (!id) {
       return;
     }
+    window.scrollTo({ top: 0, behavior: "instant" });
     const cached = getCachedSpecies(id);
     const seededAnimal = cached ?? animalMap.get(id) ?? null;
     setAnimal(seededAnimal);
     pushRecentlyViewed(id);
 
-    const shouldHydrate = !seededAnimal || seededAnimal.partial || id.startsWith("gbif-") || id.startsWith("wiki-");
+    const needsClassification = hasUnknownClassification(seededAnimal);
+    const shouldHydrate = !seededAnimal || seededAnimal.partial || needsClassification || id.startsWith("gbif-") || id.startsWith("wiki-");
     if (!shouldHydrate) {
       setLoading(false);
       return;
@@ -80,7 +91,7 @@ export default function SpeciesDetail() {
         setAnimal(current);
         setCachedSpecies(current);
 
-        if (current.partial) {
+        if (current.partial || hasUnknownClassification(current)) {
           try {
             const hydrated = await hydrateSpeciesWithAI(current);
             if (active) {
@@ -147,7 +158,7 @@ export default function SpeciesDetail() {
       <div className="page-frame">
         <section className="page-card rounded-[1.75rem] p-6">
           <h1 className="page-title">
-            {id.startsWith("wiki-") ? "Fetching species from Wikipedia" : "Hydrating species record"}
+            {id.startsWith("wiki-") ? "Fetching data..." : "Loading species profile..."}
           </h1>
           <p className="page-lede">
             {id.startsWith("wiki-")
@@ -343,7 +354,9 @@ export default function SpeciesDetail() {
                     {videos[currentVideoIndex].views !== undefined && `${videos[currentVideoIndex].views.toLocaleString()} views`}
                   </p>
                 )}
-                <p className="mt-3 text-sm leading-7 text-app-muted">{videos[currentVideoIndex].description}</p>
+                <div className="mt-3 h-[12rem] overflow-y-auto pr-2 text-sm leading-7 text-app-muted custom-scrollbar">
+                  {videos[currentVideoIndex].description || "No description available."}
+                </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-xs text-app-soft/80 border-t border-white/5 pt-3">
                 <span>Video {currentVideoIndex + 1} of {videos.length}</span>

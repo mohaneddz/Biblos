@@ -214,7 +214,7 @@ export default function Home() {
           {featuredEcosystems.map((ecosystem) => {
             const featured = getFeaturedEcosystemSpecies(ecosystem);
             return (
-              <Link key={ecosystem.id} to={`/ecosystems?ecosystem=${encodeURIComponent(ecosystem.id)}`} className="page-card interactive-card group overflow-hidden rounded-[1.5rem]">
+              <Link key={ecosystem.id} to={`/ecosystems/${ecosystem.id}`} className="page-card interactive-card group overflow-hidden rounded-[1.5rem]">
                 <div className="relative h-44 overflow-hidden border-b border-white/8">
                   {biomeSummaries[ecosystem.articleTitle]?.thumbnailUrl ? (
                     <img src={biomeSummaries[ecosystem.articleTitle]?.thumbnailUrl ?? ""} alt={ecosystem.title} className="h-full w-full object-cover transition duration-500" />
