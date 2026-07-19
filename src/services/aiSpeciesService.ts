@@ -48,6 +48,15 @@ Return a raw JSON array matching this format (no explanations, no markdown block
 export async function hydrateSpeciesWithAI(animal: Animal): Promise<Animal> {
   const settings = getSettings();
   const schema = `{
+    "classification": {
+      "kingdom": "string (REQUIRED, e.g. 'Animalia')",
+      "phylum": "string (REQUIRED, e.g. 'Chordata')",
+      "className": "string (REQUIRED, e.g. 'Mammalia')",
+      "order": "string (REQUIRED, e.g. 'Carnivora')",
+      "family": "string (REQUIRED, e.g. 'Felidae')",
+      "genus": "string (REQUIRED, e.g. 'Panthera')",
+      "species": "string (REQUIRED, specific epithet or binomial, e.g. 'leo' or 'Panthera leo')"
+    },
     "averageLifespanYears": number (REQUIRED, estimate from family/order averages if unknown),
     "shortDescription": "string (1 compelling sentence summary, NEVER empty)",
     "detailedDescription": "string (a rich 3-5 sentence paragraph covering appearance, behavior, ecology, diet, and interesting adaptations. NEVER generic.)",
@@ -72,7 +81,7 @@ Classification: ${animal.classification.kingdom} > ${animal.classification.phylu
 
 CRITICAL RULES:
 1. You MUST respond ONLY with a raw, valid JSON object. No markdown, no explanations, no code blocks.
-2. NEVER use "Unknown" for ANY field. You are a zoologist — make your best scientific estimate based on taxonomy, habitat, and related species in the same family/order.
+2. NEVER use "Unknown" for ANY field. You are a zoologist — resolve and fill in all classification levels (kingdom, phylum, className, order, family, genus, species) with correct scientific names if they are currently 'Unknown'.
 3. For numeric fields (lifespan, weight, size), ALWAYS provide a number. If exact data is unavailable, estimate based on the average for the family or order. For example, if a specific shrimp species' weight is unknown, use the typical weight range for shrimp in that family.
 4. For "diet", choose the most accurate option. Many marine invertebrates are "Filter Feeder" or "Detritivore", not just "Carnivore/Herbivore/Omnivore".
 5. For "activityPattern", estimate based on the ecology of the species. Deep-sea species are typically "Cathemeral", nocturnal hunters are "Nocturnal", etc.
@@ -87,6 +96,15 @@ ${schema}
 
 Example (for Panthera leo):
 {
+  "classification": {
+    "kingdom": "Animalia",
+    "phylum": "Chordata",
+    "className": "Mammalia",
+    "order": "Carnivora",
+    "family": "Felidae",
+    "genus": "Panthera",
+    "species": "leo"
+  },
   "averageLifespanYears": 15,
   "shortDescription": "The lion is the only truly social cat, forming prides of up to 30 individuals across African savannas and the Gir Forest of India.",
   "detailedDescription": "The lion (Panthera leo) is a muscular, deep-chested cat with a short, rounded head, reduced neck, and round ears. Males are distinguished by their thick mane, which protects the neck during fights. Lions are apex predators that hunt cooperatively, primarily targeting large ungulates like zebra, wildebeest, and buffalo. They are the most social of all wild cats, living in prides consisting of related females, their cubs, and a coalition of males. Lions spend 16-20 hours per day resting and are most active at dusk and dawn.",
@@ -126,6 +144,15 @@ Example (for Panthera leo):
 
     const result: Animal = {
       ...animal,
+      classification: {
+        kingdom: data.classification?.kingdom ?? animal.classification.kingdom,
+        phylum: data.classification?.phylum ?? animal.classification.phylum,
+        className: data.classification?.className ?? animal.classification.className,
+        order: data.classification?.order ?? animal.classification.order,
+        family: data.classification?.family ?? animal.classification.family,
+        genus: data.classification?.genus ?? animal.classification.genus,
+        species: data.classification?.species ?? animal.classification.species,
+      },
       averageLifespanYears: data.averageLifespanYears ?? animal.averageLifespanYears,
       shortDescription: data.shortDescription ?? animal.shortDescription,
       detailedDescription: data.detailedDescription ?? animal.detailedDescription,

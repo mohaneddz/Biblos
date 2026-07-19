@@ -20,6 +20,7 @@ import {
 } from "../components/icons";
 import { collectExpandableNodeIds, findNodePath, findTreeNode, speciesForTreeNode, treeOfLife, type TreeNode } from "../data/treeOfLife";
 import { getHiddenSpecies } from "../services/cache";
+import { PageHeader } from "../components/PageHeader";
 
 function nodeIcon(node: TreeNode) {
   const className = "h-4 w-4";
@@ -221,24 +222,25 @@ export default function TreeOfLife() {
 
   return (
     <div className="page-frame">
-      <section className="page-card rounded-[1.8rem] p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="page-title">Tree of Life</h1>
-            <p className="page-lede">
-              This page now separates two jobs clearly: <strong className="text-app-text">Expand</strong> opens deeper taxonomy under a branch, while <strong className="text-app-text">Explore</strong> jumps into the species directory with the matching filter already applied.
-            </p>
-          </div>
+      <PageHeader
+        title="Tree of Life"
+        description={
+          <>
+            This page now separates two jobs clearly: <strong className="text-app-text">Expand</strong> opens deeper taxonomy under a branch, while <strong className="text-app-text">Explore</strong> jumps into the species directory with the matching filter already applied.
+          </>
+        }
+        storageKey="tree-of-life"
+        actions={
           <div className="flex flex-wrap gap-3">
-            <button type="button" className="ghost-button text-sm" onClick={() => setExpandedIds(new Set(expandableIds))}>
+            <button type="button" className="ghost-button text-sm cursor-pointer select-none" onClick={() => setExpandedIds(new Set(expandableIds))}>
               Expand all
             </button>
-            <button type="button" className="ghost-button text-sm" onClick={() => setExpandedIds(new Set(["life"]))}>
+            <button type="button" className="ghost-button text-sm cursor-pointer select-none" onClick={() => setExpandedIds(new Set(["life"]))}>
               Collapse all
             </button>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.98fr)_minmax(23rem,1.02fr)]">
         <div className="page-card rounded-[1.7rem] p-4 md:p-5">
