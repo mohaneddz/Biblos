@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { EcosystemCard } from "../components/EcosystemCard";
 import { GlobeGridIcon, LeafClusterIcon } from "../components/icons";
 import { ecosystems } from "../data/ecosystems";
+import { PageHeader } from "../components/PageHeader";
 
 const BIOME_TYPES = [
   { label: "All", value: "" },
@@ -43,24 +44,20 @@ export default function Ecosystems() {
 
   return (
     <div className="page-frame">
-      {/* Header */}
-      <section className="page-card rounded-[1.85rem] p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="page-title">Ecosystems</h1>
-            <p className="page-lede">
-              Explore every major biome on Earth — from deep-sea hydrothermal vents to Arctic tundra. Click any card for detailed stats, species lists, and an interactive world heatmap.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/explorer" className="ghost-button text-sm">
-              Open explorer atlas
-            </Link>
-          </div>
-        </div>
+      <PageHeader
+        title="Ecosystems"
+        description="Explore every major biome on Earth — from deep-sea hydrothermal vents to Arctic tundra. Click any card for detailed stats, species lists, and an interactive world heatmap."
+        storageKey="ecosystems"
+        actions={
+          <Link to="/explorer" className="ghost-button text-sm cursor-pointer select-none">
+            Open explorer atlas
+          </Link>
+        }
+      />
 
-        {/* Search + filter row */}
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Search + filter card */}
+      <section className="page-card rounded-[1.85rem] p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -76,7 +73,7 @@ export default function Ecosystems() {
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-app-muted hover:text-app-text transition"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-app-muted hover:text-app-text transition cursor-pointer"
                 aria-label="Clear search"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +91,7 @@ export default function Ecosystems() {
                 type="button"
                 onClick={() => setBiomeType(bt.value)}
                 className={[
-                  "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition",
+                  "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition cursor-pointer",
                   biomeType === bt.value
                     ? "bg-app-accent text-white"
                     : "border border-white/8 bg-white/[0.03] text-app-muted hover:border-app-accent/30 hover:text-app-text",
@@ -113,7 +110,7 @@ export default function Ecosystems() {
             <button
               type="button"
               onClick={() => { setQuery(""); setBiomeType(""); }}
-              className="text-xs text-app-muted hover:text-app-accent transition"
+              className="text-xs text-app-muted hover:text-app-accent transition cursor-pointer"
             >
               Clear filters
             </button>

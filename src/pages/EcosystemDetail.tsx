@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { AnimalCard } from "../components/AnimalCard";
@@ -139,6 +139,11 @@ export default function EcosystemDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const ecosystem = getEcosystemById(id);
+
+  // Scroll to top on route parameter change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [id]);
 
   const summaries = useWikipediaSummaries(ecosystem ? [ecosystem.articleTitle] : []);
   const summary = ecosystem ? summaries[ecosystem.articleTitle] : undefined;
