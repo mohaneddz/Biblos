@@ -8,6 +8,7 @@ import AiNaturalist from "./pages/AiNaturalist";
 import Collection from "./pages/Collection";
 import Compare from "./pages/Compare";
 import Ecosystems from "./pages/Ecosystems";
+import EcosystemDetail from "./pages/EcosystemDetail";
 import Explorer from "./pages/Explorer";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/tree" element={<TreeOfLife />} />
         <Route path="/explorer" element={<Explorer />} />
         <Route path="/ecosystems" element={<Ecosystems />} />
+        <Route path="/ecosystems/:id" element={<EcosystemDetail />} />
         <Route path="/ai" element={<AiNaturalist />} />
         <Route path="/compare" element={<Compare />} />
         <Route path="/atlas" element={<Navigate to="/explorer" replace />} />

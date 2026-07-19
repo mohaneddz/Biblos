@@ -143,7 +143,11 @@ function readCache(animalId: string, mode: SpeciesMediaMode) {
     const raw = window.localStorage.getItem(cacheKey(animalId, mode));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SpeciesMediaBundle;
-    return isReusable(parsed) ? parsed : null;
+    if (!isReusable(parsed)) return null;
+    return {
+      ...parsed,
+      gallery: dedupeAssets(parsed.gallery || []),
+    };
   } catch {
     return null;
   }
@@ -184,12 +188,52 @@ function isOpenLicense(_value: string | null | undefined) {
   return true;
 }
 
+function getAssetFingerprint(url: string): string {
+  const normalized = url.toLowerCase().trim();
+
+  // 1. iNaturalist photo ID extraction (e.g., /photos/123456/)
+  const iNatMatch = normalized.match(/\/photos\/(\d+)\//);
+  if (iNatMatch) {
+    return `inat-${iNatMatch[1]}`;
+  }
+
+  // 2. Wikimedia Commons filename extraction
+  if (normalized.includes("wikipedia") || normalized.includes("wikimedia")) {
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      const parts = pathname.split("/");
+      const filenameSegment = parts.find(
+        (p) => p.includes(".") && !p.startsWith("px-") && !p.match(/^\d+px-/)
+      );
+      if (filenameSegment) {
+        return `wiki-${filenameSegment}`;
+      }
+    } catch {
+      // Fallback if URL parsing fails
+    }
+  }
+
+  // 3. Fallback generic filename cleanup (ignores size suffixes and extensions)
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const lastSegment = pathname.substring(pathname.lastIndexOf("/") + 1);
+    return lastSegment
+      .replace(/\.(jpg|jpeg|png|webp|gif|svg)$/, "")
+      .replace(/[_-](medium|large|small|thumb|thumbnail|original|square|card|hero|rect|sq)$/, "")
+      .replace(/\/(medium|large|small|thumb|thumbnail|original|square)$/, "") || normalized;
+  } catch {
+    return normalized;
+  }
+}
+
 function dedupeAssets(assets: SpeciesImageAsset[]) {
   const seen = new Set<string>();
   return assets.filter((asset) => {
-    const key = asset.url.split("?")[0]; // ignore query params for dedup
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const fingerprint = getAssetFingerprint(asset.url);
+    if (seen.has(fingerprint)) {
+      return false;
+    }
+    seen.add(fingerprint);
     return true;
   });
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CompareTable } from "../components/CompareTable";
 import { BirdIcon, GlobeGridIcon, MammalIcon } from "../components/icons";
 import { animals } from "../data/animals";
+import { PageHeader } from "../components/PageHeader";
 
 export default function Compare() {
   const [leftId, setLeftId] = useState(animals[0].id);
@@ -15,14 +16,18 @@ export default function Compare() {
 
   return (
     <div className="page-frame">
-      <section className="page-card rounded-[1.75rem] p-6">
-        <h1 className="page-title">Compare</h1>
-        <p className="page-lede">The compare view now leans on icons, grouped sections, and direct ecological context so differences scan faster than a raw table.</p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <PageHeader
+        title="Compare"
+        description="The compare view now leans on icons, grouped sections, and direct ecological context so differences scan faster than a raw table."
+        storageKey="compare"
+      />
+
+      <section className="page-card rounded-[1.75rem] p-5 mt-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {selectors.map(({ label, value, setter }) => (
             <label key={label} className="grid gap-2 text-sm text-app-muted">
               <span>{label}</span>
-              <select value={value} onChange={(event) => setter(event.target.value)} className="rounded-[1rem] border border-white/8 bg-black/25 px-4 py-3 text-app-text">
+              <select value={value} onChange={(event) => setter(event.target.value)} className="rounded-[1rem] border border-white/8 bg-black/25 px-4 py-3 text-app-text cursor-pointer">
                 {animals.map((animal) => (
                   <option key={animal.id} value={animal.id}>
                     {animal.commonName}

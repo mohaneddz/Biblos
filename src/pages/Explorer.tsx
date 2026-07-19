@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
@@ -27,19 +28,62 @@ export default function Explorer() {
   const selectedContinent = (searchParams.get("continent") as Continent | null) ?? "Africa";
   const continentSpecies = animals.filter((animal) => animal.continents.includes(selectedContinent));
 
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("biblos.header-collapsed.explorer") === "true";
+    }
+    return false;
+  });
+
+  const toggle = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("biblos.header-collapsed.explorer", String(next));
+      return next;
+    });
+  };
+
   return (
     <div className="page-frame">
       <section className="page-card overflow-hidden rounded-[1.9rem] p-6 md:p-7">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(20rem,0.98fr)]">
-          <div>
-            <h1 className="page-title">Explorer</h1>
-            <p className="page-lede">
-              Explorer is the organic discovery surface for Biblos: traits and regions live together here, and the atlas browsing flow is integrated directly into this page.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/species" className="primary-button text-sm">
-                Open full directory
-              </Link>
+          <div className="flex flex-col justify-between min-w-0">
+            <div>
+              <div className="flex items-center justify-between">
+                <h1 className="page-title select-none">Explorer</h1>
+                <button
+                  type="button"
+                  onClick={toggle}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
+                  title={isCollapsed ? "Show description" : "Hide description"}
+                >
+                  {isCollapsed ? (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              <div
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  isCollapsed ? "max-h-0 opacity-0 mt-0" : "max-h-[12rem] opacity-100 mt-3"
+                }`}
+              >
+                <p className="page-lede text-app-muted pr-2">
+                  Explorer is the organic discovery surface for Biblos: traits and regions live together here, and the atlas browsing flow is integrated directly into this page.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link to="/species" className="primary-button text-sm cursor-pointer select-none">
+                    Open full directory
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">

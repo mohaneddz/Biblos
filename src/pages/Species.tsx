@@ -12,6 +12,7 @@ import type { Animal, Continent } from "../types/animal";
 import { RefreshIcon, AtlasIcon, CompassIcon, CopyIcon } from "../components/icons";
 import { reportError } from "../services/errorReporter";
 import { toastService } from "../services/toastService";
+import { PageHeader } from "../components/PageHeader";
 
 function unique<T>(items: T[]) {
   return [...new Set(items)].sort();
@@ -340,14 +341,14 @@ export default function Species() {
 
   return (
     <div className="page-frame">
-      <section className="page-card rounded-[1.75rem] p-6">
+      <PageHeader
+        title="Species Directory"
+        description="Search the local field index by taxonomy, ecology, geography, and activity pattern. Every discovery route in Biblos lands here."
+        storageKey="species"
+      />
+
+      <section className="page-card rounded-[1.75rem] p-6 mt-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="page-title">Species Directory</h1>
-            <p className="page-lede">
-              Search the local field index by taxonomy, ecology, geography, and activity pattern. Every discovery route in Biblos lands here.
-            </p>
-          </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="tag-chip">{visibleResults.length} matches</span>
             {visibleFavoritesCount > 0 ? <span className="tag-chip">{visibleFavoritesCount} favorites</span> : null}
@@ -460,7 +461,7 @@ export default function Species() {
                 </span>
                 <span>Discovering via AI…</span>
               </span>
-            ) : filterDiscoveryHits.length > 0 && hasNonQueryFilter ? (
+            ) : (filterDiscoveryHits.length > 0 && hasNonQueryFilter) ? (
               <span className="tag-chip text-app-accent border-app-accent/25">
                 +{filterDiscoveryHits.length} AI-discovered
               </span>

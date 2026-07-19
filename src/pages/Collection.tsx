@@ -5,6 +5,7 @@ import { animalMap } from "../data/animals";
 import { getBookmarkedSpecies, getCachedSpecies, getFavorites, getRecentlyViewedAnimals, getHiddenSpecies } from "../services/cache";
 import { useEffect } from "react";
 import type { Animal } from "../types/animal";
+import { PageHeader } from "../components/PageHeader";
 
 export default function Collection() {
   const [, setVersion] = useState(0);
@@ -32,12 +33,11 @@ export default function Collection() {
 
   return (
     <div className="page-frame">
-      <section className="page-card rounded-[1.75rem] p-6">
-        <h1 className="page-title">Collection</h1>
-        <p className="page-lede">
-          Collection is the saved-state layer for the local MVP. Favorites mark recurring records, bookmarks hold research targets, and recents preserve your current trail through explorer, species, and ecosystem views.
-        </p>
-      </section>
+      <PageHeader
+        title="Collection"
+        description="Collection is the saved-state layer for the local MVP. Favorites mark recurring records, bookmarks hold research targets, and recents preserve your current trail through explorer, species, and ecosystem views."
+        storageKey="collection"
+      />
 
       <section>
         <div className="mb-4 flex items-end justify-between gap-3">

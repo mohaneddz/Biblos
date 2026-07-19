@@ -25,39 +25,27 @@ export default function AiNaturalist() {
 
   return (
     <div className="page-frame h-full min-h-0 flex flex-col">
-      {!isBannerHidden ? (
-        <section className="page-card rounded-[1.75rem] p-6">
-          <div className="flex items-center justify-between">
-            <h1 className="page-title">AI Naturalist</h1>
-            <div className="flex flex-col gap-2 items-center">
-              <button
-                type="button"
-                onClick={() => setShowHelp(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer"
-                title="How it works"
-              >
-                <span className="text-sm font-semibold">?</span>
-              </button>
-              <button
-                type="button"
-                onClick={toggleBanner}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer"
-                title="Hide description"
-              >
-                <span className="text-xs">✕</span>
-              </button>
+      <section className="page-card rounded-[1.75rem] p-6 transition-all duration-300 ease-in-out shrink-0">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="page-title select-none">AI Naturalist</h1>
+            
+            <div
+              className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                isBannerHidden ? "max-h-0 opacity-0 mt-0" : "max-h-[12rem] opacity-100 mt-3"
+              }`}
+            >
+              <p className="page-lede text-app-muted pr-2 leading-relaxed">
+                A Groq-backed natural history assistant over the Biblos corpus, using local retrieval across taxonomy, biome, behavior, conservation, and comparison records before each answer.
+              </p>
             </div>
           </div>
-          <p className="page-lede mt-2">A Groq-backed natural history assistant over the Biblos corpus, using local retrieval across taxonomy, biome, behavior, conservation, and comparison records before each answer.</p>
-        </section>
-      ) : (
-        <div className="flex items-center justify-between px-3 py-1">
-          <h1 className="text-xl font-semibold text-white tracking-wide">AI Naturalist</h1>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowHelp(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
               title="How it works"
             >
               <span className="text-sm font-semibold">?</span>
@@ -65,14 +53,23 @@ export default function AiNaturalist() {
             <button
               type="button"
               onClick={toggleBanner}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer text-xs"
-              title="Show description"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
+              title={isBannerHidden ? "Show description" : "Hide description"}
             >
-              👁
+              {isBannerHidden ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
-      )}
+      </section>
       {settings.aiEnabled ? (
         <AiNaturalistPanel
           initialPrompt={species ? `Tell me about ${species}` : ""}
