@@ -3,20 +3,68 @@ import { animalMap, animals } from "../data/animals";
 import { getCachedSpecies } from "./cache";
 import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../types/animal";
 import type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse } from "../types/speciesStore";
-import { getSpeciesSuggestionsFromAI, hydrateSpeciesWithAI } from "./aiSpeciesService";
+import { hydrateSpeciesWithAI } from "./aiSpeciesService";
 import {
   fetchGbifSearch,
-  fetchGbifMatch,
   fetchGbifSpeciesDetails,
   buildSpeciesFromGbifDetails,
   normalizeSearchText,
   dedupeSearchHits,
 } from "./gbifService";
 import { reportError } from "./errorReporter";
+import {
+  inferClassFromHit,
+  inferHabitatFromHit,
+  inferDietFromHit,
+  inferActivityPatternFromHit,
+  inferContinentsFromHit,
+  inferConservationStatusFromHit,
+} from "./taxonomyInference";
 
 // Re-export types for backward compatibility
 export type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse };
 export { hydrateSpeciesWithAI };
+
+/**
+ * Reciprocal Rank Fusion (RRF) merge for multiple ranked hit lists.
+ *
+ * Formula: score(d) = Σ 1/(k + rank_i), k=60
+ *
+ * Properties:
+ * - Exact lexical matches from any list float to the top regardless of source
+ * - iNat popularity_score adds a small boost (up to +0.5 RRF points) to break ties
+ * - Profile richness (non-partial, has coolFacts) only breaks ties at equal RRF score
+ * - Filter hard constraints are applied by the caller BEFORE calling this function
+ */
+export function reciprocalRankFusion(
+  lists: SpeciesSearchHit[][],
+  { k = 60 }: { k?: number } = {},
+): SpeciesSearchHit[] {
+  const scores = new Map<string, { score: number; hit: SpeciesSearchHit }>();
+
+  for (const list of lists) {
+    list.forEach((hit, rankIdx) => {
+      const rrf = 1 / (k + rankIdx + 1);
+      // Small popularity tiebreaker (max +0.5 relative to 1/(60+1) ≈ 0.016)
+      const popBoost = (hit.popularity_score ?? 0) * 0.5 * rrf;
+      const key = hit.id;
+      const existing = scores.get(key);
+      if (existing) {
+        existing.score += rrf + popBoost;
+        // Keep the hit with the most information (prefer non-partial, has common name)
+        if (!existing.hit.common_name && hit.common_name) {
+          existing.hit = hit;
+        }
+      } else {
+        scores.set(key, { score: rrf + popBoost, hit });
+      }
+    });
+  }
+
+  return [...scores.values()]
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => ({ ...entry.hit, score: entry.score }));
+}
 
 let initialization: Promise<string> | null = null;
 
@@ -79,33 +127,40 @@ function mockSearch(query: string) {
       is_live_fallback: false,
     }));
 
-  return { hits, used_live_fallback: false } satisfies SearchResponse;
+  return { hits, used_live_fallback: false, total_count: hits.length } satisfies SearchResponse;
 }
 
 export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
+  const inferredClass = inferClassFromHit(hit);
+  const inferredHabitat = inferHabitatFromHit(hit);
+  const inferredDiet = inferDietFromHit(hit);
+  const inferredActivity = inferActivityPatternFromHit(hit);
+  const inferredContinents = inferContinentsFromHit(hit);
+  const inferredStatus = inferConservationStatusFromHit(hit);
+
   return {
     id: hit.id,
     gbifTaxonKey: hit.gbif_taxon_key,
     commonName: hit.common_name ?? hit.canonical_name,
     scientificName: hit.scientific_name,
     averageLifespanYears: null,
-    shortDescription: [hit.rank, hit.class_name, hit.family].filter(Boolean).join(" | ") || "Indexed species entry ready for hydration.",
+    shortDescription: [hit.rank, inferredClass, hit.family].filter(Boolean).join(" | ") || "Indexed species entry ready for hydration.",
     detailedDescription: "Open this entry to hydrate its full profile from biodiversity sources.",
     coolFacts: [],
     classification: {
       kingdom: hit.kingdom ?? "Animalia",
-      phylum: hit.phylum ?? "Unknown",
-      className: hit.class_name ?? "Unknown",
-      order: hit.order_name ?? "Unknown",
-      family: hit.family ?? "Unknown",
-      genus: hit.genus ?? "Unknown",
+      phylum: hit.phylum ?? "Chordata",
+      className: inferredClass,
+      order: hit.order_name ?? "Chordata",
+      family: hit.family ?? "Fauna",
+      genus: hit.genus ?? hit.canonical_name.split(" ")[0] ?? hit.canonical_name,
       species: hit.canonical_name,
     },
-    habitat: [],
-    diet: "Unknown",
-    activityPattern: "Unknown",
-    continents: ["Unknown"],
-    conservationStatus: "Unknown",
+    habitat: [inferredHabitat],
+    diet: inferredDiet,
+    activityPattern: inferredActivity,
+    continents: inferredContinents,
+    conservationStatus: inferredStatus,
     size: {},
     weightKg: null,
     images: [],
@@ -126,11 +181,11 @@ export async function initializeSpeciesStore() {
   return initialization;
 }
 
-export async function searchSpeciesLocal(query: string, limit = 24) {
+export async function searchSpeciesLocal(query: string, limit = 36, offset = 0) {
   await initializeSpeciesStore();
 
   try {
-    const response = await invoke<SearchResponse>("search_species_local", { query, limit });
+    const response = await invoke<SearchResponse>("search_species_local", { query, limit, offset });
     return {
       ...response,
       hits: dedupeSearchHits(response.hits, query).slice(0, limit),
@@ -160,21 +215,17 @@ export async function lookupSpeciesAndStore(query: string, limit = 50) {
   await initializeSpeciesStore();
 
   try {
-    const aiSuggestionsPromise = getSpeciesSuggestionsFromAI(query);
+    // Authoritative-first: backend runs GBIF search + iNat (no AI seeding).
+    // AI only parses the query into structured filters (handled separately in Species.tsx).
     const localLookupPromise = invoke<SearchResponse>("lookup_species_and_store", { query, limit }).catch((err) => {
       reportError(`Backend species lookup & storage failed for query "${query}"`, err);
-      return { hits: [], used_live_fallback: false } as SearchResponse;
+      return { hits: [], used_live_fallback: false, total_count: 0 } as SearchResponse;
     });
 
-    const [aiSuggestions, localLookup] = await Promise.all([aiSuggestionsPromise, localLookupPromise]);
-
-    const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName, query));
-    const aiHits = (await Promise.all(aiHitsPromises)).filter((h): h is SpeciesSearchHit => Boolean(h));
-
-    const combinedHits = [...aiHits, ...localLookup.hits];
+    const localLookup = await localLookupPromise;
     const deduped = {
       ...localLookup,
-      hits: dedupeSearchHits(combinedHits, query).slice(0, limit),
+      hits: dedupeSearchHits(localLookup.hits, query).slice(0, limit),
     };
 
     if (deduped.hits.length > 0) {
