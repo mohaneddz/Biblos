@@ -85,10 +85,9 @@ function TreeRow({
     <div className="grid gap-3">
       <div
         className={[
-          "tree-card grid gap-3 rounded-[1.15rem] border px-3 py-3 transition hover:border-app-accent/20 hover:bg-white/[0.03] lg:grid-cols-[minmax(0,1fr)_auto]",
+          "tree-card grid gap-3 rounded-[1.15rem] border px-3 py-3 transition hover:border-app-accent/20 hover:bg-white/[0.03] lg:grid-cols-[minmax(0,1fr)_auto] cursor-pointer",
           activeNodeId === node.id ? "border-app-accent/30 bg-app-accent/8" : "border-white/8 bg-white/[0.02]",
         ].join(" ")}
-        style={{ marginLeft: `${depth * 0.85}rem` }}
         role="button"
         tabIndex={0}
         onClick={() => onSelect(node.id)}
@@ -113,12 +112,26 @@ function TreeRow({
 
         <div className="flex flex-wrap items-center gap-2">
           {hasChildren ? (
-            <button type="button" className="ghost-button min-h-10 px-4 text-sm" onClick={() => onExpand(node.id)}>
+            <button
+              type="button"
+              className="ghost-button min-h-10 px-4 text-sm cursor-pointer select-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand(node.id);
+              }}
+            >
               {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
               Expand
             </button>
           ) : null}
-          <button type="button" className="primary-button min-h-10 px-4 text-sm" onClick={() => onExplore(node.id)}>
+          <button
+            type="button"
+            className="primary-button min-h-10 px-4 text-sm cursor-pointer select-none"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExplore(node.id);
+            }}
+          >
             <BinocularsIcon className="h-4 w-4" />
             Explore
           </button>
@@ -126,7 +139,7 @@ function TreeRow({
       </div>
 
       {hasChildren && isExpanded ? (
-        <div className="grid gap-3">
+        <div className="grid gap-3 pl-4 border-l border-white/10 ml-[1.125rem] relative">
           {node.children?.map((child) => (
             <TreeRow
               key={child.id}
@@ -265,9 +278,15 @@ export default function TreeOfLife() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2 text-[0.68rem] uppercase tracking-[0.18em] text-app-soft">
-                  {activePath.map((node) => (
+                  {activePath.map((node, idx) => (
                     <span key={node.id} className="inline-flex items-center gap-2">
-                      {node.label}
+                      {idx > 0 && <span className="text-white/20 select-none">&rsaquo;</span>}
+                      <span
+                        className="hover:text-white transition cursor-pointer select-none"
+                        onClick={() => selectNode(node.id)}
+                      >
+                        {node.label}
+                      </span>
                     </span>
                   ))}
                 </div>

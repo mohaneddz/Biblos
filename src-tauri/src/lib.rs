@@ -1,6 +1,6 @@
 mod species_store;
 
-use species_store::{SearchResponse, SpeciesProfilePayload};
+use species_store::{InatAutocompleteResponse, SearchResponse, SpeciesProfilePayload, StructuredFilters};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -45,8 +45,9 @@ async fn search_species_local(
     app: tauri::AppHandle,
     query: String,
     limit: Option<usize>,
+    offset: Option<usize>,
 ) -> Result<SearchResponse, String> {
-    species_store::search_index(Some(&app), &query, limit.unwrap_or(24)).map_err(|error| error.to_string())
+    species_store::search_index(Some(&app), &query, limit.unwrap_or(36), offset.unwrap_or(0)).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -85,6 +86,28 @@ async fn hydrate_species_profile(
 #[tauri::command]
 async fn get_cached_species_profiles(app: tauri::AppHandle, ids: Vec<String>) -> Result<Vec<serde_json::Value>, String> {
     species_store::list_profiles_by_ids(Some(&app), &ids).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn search_inat_autocomplete(
+    app: tauri::AppHandle,
+    query: String,
+    limit: Option<usize>,
+) -> Result<InatAutocompleteResponse, String> {
+    species_store::search_inat_autocomplete(Some(&app), &query, limit.unwrap_or(20))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn parse_query_to_filters(
+    query: String,
+    groq_api_key: Option<String>,
+    model: Option<String>,
+) -> Result<StructuredFilters, String> {
+    species_store::parse_query_to_filters(&query, groq_api_key, model)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -169,6 +192,8 @@ pub fn run() {
             lookup_species_and_store,
             hydrate_species_profile,
             get_cached_species_profiles,
+            search_inat_autocomplete,
+            parse_query_to_filters,
             ask_ai_naturalist
         ])
         .run(tauri::generate_context!())

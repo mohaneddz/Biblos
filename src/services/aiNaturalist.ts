@@ -4,6 +4,7 @@ import { ecosystems } from "../data/ecosystems";
 import { flattenTree, treeOfLife } from "../data/treeOfLife";
 import type { Animal } from "../types/animal";
 import { getSpeciesMedia } from "./speciesMedia";
+import { getSettings } from "./cache";
 
 export type NaturalistContextHit = {
   id: string;
@@ -324,4 +325,50 @@ export async function askNaturalist(params: {
   });
 
   return { answer, contextHits };
+}
+
+export async function generateComparisonSummary(left: Animal, right: Animal) {
+  const settings = getSettings();
+  
+  const leftContext = [
+    `Species: ${left.commonName} (${left.scientificName})`,
+    `Taxonomy: ${left.classification.kingdom} > ${left.classification.phylum} > ${left.classification.className} > ${left.classification.order} > ${left.classification.family} > ${left.classification.genus} > ${left.classification.species}`,
+    `Summary: ${left.shortDescription}`,
+    `Detail: ${left.detailedDescription}`,
+    `Habitats: ${left.habitat.join(", ")}`,
+    `Diet: ${left.diet}`,
+    `Activity: ${left.activityPattern}`,
+    `Continents: ${left.continents.join(", ")}`,
+    `Conservation: ${left.conservationStatus}`,
+    `Facts: ${left.coolFacts.join(" ")}`,
+  ].join("\n");
+
+  const rightContext = [
+    `Species: ${right.commonName} (${right.scientificName})`,
+    `Taxonomy: ${right.classification.kingdom} > ${right.classification.phylum} > ${right.classification.className} > ${right.classification.order} > ${right.classification.family} > ${right.classification.genus} > ${right.classification.species}`,
+    `Summary: ${right.shortDescription}`,
+    `Detail: ${right.detailedDescription}`,
+    `Habitats: ${right.habitat.join(", ")}`,
+    `Diet: ${right.diet}`,
+    `Activity: ${right.activityPattern}`,
+    `Continents: ${right.continents.join(", ")}`,
+    `Conservation: ${right.conservationStatus}`,
+    `Facts: ${right.coolFacts.join(" ")}`,
+  ].join("\n");
+
+  const question = `Compare the ${left.commonName} and ${right.commonName} based on the provided ecological, taxonomic, and behavioral data. Produce an engaging, deep comparative analysis.`;
+
+  const context = `System Instruction: Compare the two species in an interesting, deeply scientific, and engaging way. Focus on physical adaptations, evolutionary divergence (Tree of Life differences), dietary strategies, and conservation. Make the writing style elegant and structured using markdown headings (##). Keep the comparative insights rich and educational.\n\n[SPECIES 1 DETAILS]\n${leftContext}\n\n[SPECIES 2 DETAILS]\n${rightContext}`;
+
+  const selectedModel = settings.aiModel || "llama-3.3-70b-versatile";
+
+  const answer = await invoke<string>("ask_ai_naturalist", {
+    question,
+    history: [],
+    context,
+    groqApiKey: settings.groqApiKey?.trim() || null,
+    model: selectedModel || null,
+  });
+
+  return answer;
 }
