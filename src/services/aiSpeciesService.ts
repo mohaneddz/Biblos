@@ -1,48 +1,49 @@
+import { invoke } from "@tauri-apps/api/core";
 import { askNaturalist } from "./aiNaturalist";
 import { getSettings } from "./cache";
 import { reportError } from "./errorReporter";
 import { searchSpeciesVideos } from "./youtubeService";
 import type { Animal } from "../types/animal";
+import type { StructuredFilters } from "../types/speciesStore";
 
-export async function getSpeciesSuggestionsFromAI(query: string): Promise<{ scientificName: string; commonName: string }[]> {
+/**
+ * Parses a natural-language search query into structured filter constraints using
+ * Groq's JSON-schema mode (via the Tauri backend command).
+ *
+ * IMPORTANT: This function does NOT suggest or invent species names.
+ * It only maps user intent to filter fields (habitat, diet, activityPattern, etc.).
+ * Authoritative sources (GBIF, iNaturalist) supply the actual candidates.
+ *
+ * Only fires for phrases >= 3 words with no binomial-name pattern.
+ * Returns null when AI is disabled, the query is too short, or an error occurs.
+ */
+export async function parseQueryToStructuredFilters(
+  query: string,
+): Promise<StructuredFilters | null> {
   const settings = getSettings();
   if (!settings.aiEnabled || !settings.groqApiKey) {
-    return [];
+    return null;
   }
 
-  const prompt = `You are a biology search assistant.
-For the search query: "${query}", return a JSON list of the top 8 actual animal species (living or recently extinct) that a user is most likely looking for.
-Avoid listing viruses, bacteria, fungi, plants, or obscure parasites unless specifically requested.
-Return a raw JSON array matching this format (no explanations, no markdown blocks):
-[
-  { "scientificName": "Panthera leo", "commonName": "Lion" },
-  { "scientificName": "Zalophus californianus", "commonName": "California Sea Lion" }
-]`;
+  const trimmed = query.trim();
+  // Only trigger for NL phrases (>= 3 words) with no binomial pattern
+  const words = trimmed.split(/\s+/);
+  const looksLikeBinomial = words.length === 2 && /^[A-Z]/.test(words[0]);
+  if (words.length < 3 || looksLikeBinomial) {
+    return null;
+  }
 
   try {
-    const response = await askNaturalist({
-      question: prompt,
-      history: [],
-      apiKey: settings.groqApiKey,
+    const result = await invoke<StructuredFilters>("parse_query_to_filters", {
+      query: trimmed,
+      groqApiKey: settings.groqApiKey,
       model: settings.aiModel,
     });
-
-    let text = response.answer.trim();
-    if (text.startsWith("```")) {
-      text = text.replace(/^```json\s*/i, "").replace(/^```\s*/, "");
-      text = text.replace(/\s*```$/, "");
-    }
-    const data = JSON.parse(text.trim());
-    if (Array.isArray(data)) {
-      return data.map((item: any) => ({
-        scientificName: String(item.scientificName || "").trim(),
-        commonName: String(item.commonName || "").trim(),
-      })).filter((item) => item.scientificName);
-    }
+    return result;
   } catch (err) {
-    reportError(`AI suggestions failed for query "${query}"`, err);
+    reportError(`NL query parsing failed for "${trimmed}"`, err);
+    return null;
   }
-  return [];
 }
 
 export async function hydrateSpeciesWithAI(animal: Animal): Promise<Animal> {

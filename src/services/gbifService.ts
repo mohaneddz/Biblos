@@ -6,8 +6,36 @@ import type {
   SpeciesSearchHit,
   SearchResponse,
 } from "../types/speciesStore";
-import { getSpeciesSuggestionsFromAI } from "./aiSpeciesService";
 import { reportError } from "./errorReporter";
+
+// ── Session-level stale-while-revalidate cache (GBIF suggest results) ────────
+
+const GBIF_CACHE_PREFIX = "biblos:gbif:suggest:";
+const GBIF_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+type GbifCacheEntry = { hits: SpeciesSearchHit[]; ts: number };
+
+function staleWhileRevalidate(
+  key: string,
+  fetcher: () => Promise<SpeciesSearchHit[]>,
+  onResult: (hits: SpeciesSearchHit[]) => void,
+) {
+  try {
+    const raw = sessionStorage.getItem(GBIF_CACHE_PREFIX + key);
+    if (raw) {
+      const entry = JSON.parse(raw) as GbifCacheEntry;
+      onResult(entry.hits); // serve stale immediately
+      if (Date.now() - entry.ts < GBIF_CACHE_TTL_MS) return; // still fresh — skip revalidation
+    }
+  } catch { /* ignore */ }
+
+  fetcher().then((hits) => {
+    try {
+      sessionStorage.setItem(GBIF_CACHE_PREFIX + key, JSON.stringify({ hits, ts: Date.now() }));
+    } catch { /* quota exceeded */ }
+    onResult(hits);
+  }).catch(() => { /* network error — stale served */ });
+}
 
 export function normalizeSearchText(value: string) {
   return value
@@ -80,12 +108,22 @@ export function toSearchHitFromGbif(item: GbifSearchItem, index = 0, query = "")
     }
   }
 
+  const preferredLower = commonName?.toLowerCase();
+  const aliases = (item.vernacularNames ?? [])
+    .filter((entry) => entry.vernacularName?.trim() && entry.vernacularName.toLowerCase() !== preferredLower)
+    .map((entry) => entry.vernacularName!.trim())
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .slice(0, 10);
+
   return {
     id: `gbif-${gbifTaxonKey}`,
     gbif_taxon_key: gbifTaxonKey,
     scientific_name: scientificName,
     canonical_name: canonicalName,
     common_name: commonName,
+    aliases,
+    inat_taxon_id: undefined,
+    popularity_score: 0,
     rank: item.rank?.trim() || "SPECIES",
     kingdom: item.kingdom?.trim() ?? null,
     phylum: item.phylum?.trim() ?? null,
@@ -194,9 +232,7 @@ export async function fetchGbifMatch(scientificName: string, commonName: string,
     }
     const data = await response.json();
     if (data.usageKey && data.kingdom?.toLowerCase() === "animalia") {
-      // Score the AI hit based on how well the common name actually matches the query.
-      // Without this, AI suggestions for e.g. 'zebra' could inject 'African Lion'
-      // (an ecosystem co-inhabitant) with score 5000, outranking every real zebra result.
+      // Score the hit based on how well the common name actually matches the query.
       const q = query.trim().toLowerCase();
       const cName = (commonName || data.vernacularName || "").toLowerCase();
       const sName = (data.canonicalName || scientificName || "").toLowerCase();
@@ -205,7 +241,7 @@ export async function fetchGbifMatch(scientificName: string, commonName: string,
         if (cName === q) score = 3000;
         else if (cName.startsWith(q) || cName.split(" ").some((w: string) => w.startsWith(q))) score = 2500;
         else if (cName.includes(q) || sName.includes(q)) score = 1500;
-        else score = 200; // AI hallucinated something unrelated to the query
+        else score = 200; // unrelated to the query
       }
 
       return {
@@ -214,6 +250,9 @@ export async function fetchGbifMatch(scientificName: string, commonName: string,
         scientific_name: data.scientificName || data.canonicalName,
         canonical_name: data.canonicalName || data.scientificName,
         common_name: commonName || data.vernacularName || null,
+        aliases: [],
+        inat_taxon_id: undefined,
+        popularity_score: 0,
         rank: data.rank || "SPECIES",
         kingdom: data.kingdom || null,
         phylum: data.phylum || null,
@@ -234,8 +273,54 @@ export async function fetchGbifMatch(scientificName: string, commonName: string,
   return null;
 }
 
+/**
+ * Strict variant of fetchGbifMatch: returns null when GBIF reports matchType=NONE.
+ * Used when validating AI or iNat candidates — we only accept confirmed matches.
+ */
+export async function fetchGbifMatchStrict(scientificName: string, commonName: string, query = ""): Promise<SpeciesSearchHit | null> {
+  try {
+    const response = await fetch(
+      `https://api.gbif.org/v1/species/match?name=${encodeURIComponent(scientificName)}&kingdom=Animalia`
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    // Reject unresolved matches
+    if (!data.usageKey || data.matchType === "NONE") return null;
+    if (data.kingdom && data.kingdom.toLowerCase() !== "animalia") return null;
+    return fetchGbifMatch(scientificName, commonName, query);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GBIF species suggest endpoint — returns lightweight autocomplete results.
+ * Faster than /species/search and intended for type-ahead.
+ */
+export async function fetchGbifSuggest(
+  query: string,
+  limit: number,
+  onResult: (hits: SpeciesSearchHit[]) => void,
+): Promise<void> {
+  const cacheKey = `suggest:${query.trim().toLowerCase()}:${limit}`;
+  staleWhileRevalidate(
+    cacheKey,
+    async () => {
+      const url = `https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&rank=SPECIES&limit=${limit}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const items: GbifSearchItem[] = await resp.json();
+      return items
+        .map((item, i) => toSearchHitFromGbif(item, i, query))
+        .filter((h): h is SpeciesSearchHit => Boolean(h));
+    },
+    onResult,
+  );
+}
+
 export async function fetchGbifSearch(query: string, limit: number): Promise<SearchResponse> {
-  const aiSuggestionsPromise = getSpeciesSuggestionsFromAI(query);
+  // GBIF search runs without AI pre-seeding — results come from GBIF only.
+  // AI is only used downstream for profile enrichment, never for candidate generation.
   const gbifSearchPromise = fetch(
     `https://api.gbif.org/v1/species/search?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&kingdom=Animalia&status=ACCEPTED&limit=${limit}`,
   ).then(r => {
@@ -246,22 +331,18 @@ export async function fetchGbifSearch(query: string, limit: number): Promise<Sea
     return { results: [] };
   });
 
-  const [aiSuggestions, payload] = await Promise.all([aiSuggestionsPromise, gbifSearchPromise]);
-
-  // Pass the query to fetchGbifMatch so it can score hits by relevance.
-  const aiHitsPromises = aiSuggestions.map((s) => fetchGbifMatch(s.scientificName, s.commonName, query));
-  const aiHits = (await Promise.all(aiHitsPromises)).filter((h): h is SpeciesSearchHit => Boolean(h));
+  const payload = await gbifSearchPromise;
 
   const gbifHits = (payload.results ?? [])
     .map((item, index) => toSearchHitFromGbif(item, index, query))
     .filter((hit): hit is SpeciesSearchHit => Boolean(hit));
 
-  const combinedHits = [...aiHits, ...gbifHits];
-  const hits = dedupeSearchHits(combinedHits, query);
+  const hits = dedupeSearchHits(gbifHits, query);
 
   return {
     hits: hits.slice(0, limit),
     used_live_fallback: true,
+    total_count: hits.length,
   } satisfies SearchResponse;
 }
 
