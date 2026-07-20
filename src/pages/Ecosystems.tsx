@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { EcosystemCard } from "../components/EcosystemCard";
-import { GlobeGridIcon, LeafClusterIcon } from "../components/icons";
+import { AtlasIcon, CompassIcon, GlobeGridIcon, LeafClusterIcon, RefreshIcon } from "../components/icons";
 import { ecosystems } from "../data/ecosystems";
 import { PageHeader } from "../components/PageHeader";
 
@@ -57,6 +57,21 @@ export default function Ecosystems() {
 
       {/* Search + filter card */}
       <section className="page-card rounded-[1.85rem] p-5">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <CompassIcon className="h-5 w-5 text-app-accent" />
+            <h2 className="text-lg font-semibold text-white">Find & Filter Biomes</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setQuery(""); setBiomeType(""); }}
+            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer"
+            title="Reset filters & refresh view"
+          >
+            <RefreshIcon className="h-3.5 w-3.5" />
+            <span>Reset</span>
+          </button>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,7 +155,7 @@ export default function Ecosystems() {
         </div>
         <div className="page-card rounded-[1.4rem] p-5 flex items-center gap-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-app-accent/12 text-app-accent">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <CompassIcon className="h-5 w-5" />
           </div>
           <div>
             <p className="text-2xl font-semibold text-white">{[...new Set(ecosystems.flatMap((e) => e.habitatFilters))].length}</p>
@@ -149,19 +164,28 @@ export default function Ecosystems() {
         </div>
       </section>
 
-      {/* Grid */}
-      {filtered.length > 0 ? (
-        <section className="page-grid page-grid-3">
-          {filtered.map((ecosystem) => (
-            <EcosystemCard key={ecosystem.id} ecosystem={ecosystem} />
-          ))}
-        </section>
-      ) : (
-        <section className="page-card rounded-[1.75rem] p-12 text-center">
-          <p className="text-2xl font-semibold text-white mb-2">No biomes found</p>
-          <p className="text-sm text-app-muted">Try a different keyword or clear your filters.</p>
-        </section>
-      )}
+      {/* Grid section with icon header */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AtlasIcon className="h-5 w-5 text-app-accent" />
+            <h2 className="text-xl font-semibold text-white">Global Biomes Directory</h2>
+          </div>
+        </div>
+
+        {filtered.length > 0 ? (
+          <div className="page-grid page-grid-3">
+            {filtered.map((ecosystem) => (
+              <EcosystemCard key={ecosystem.id} ecosystem={ecosystem} />
+            ))}
+          </div>
+        ) : (
+          <div className="page-card rounded-[1.75rem] p-12 text-center">
+            <p className="text-2xl font-semibold text-white mb-2">No biomes found</p>
+            <p className="text-sm text-app-muted">Try a different keyword or clear your filters.</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

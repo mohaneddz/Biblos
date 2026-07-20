@@ -13,6 +13,12 @@ export type SpeciesSearchHit = {
   order_name: string | null;
   family: string | null;
   genus: string | null;
+  /** Comma-separated synonym / alternate vernacular names stored in the index */
+  aliases?: string[];
+  /** iNaturalist taxon ID — set when the hit was resolved via iNaturalist */
+  inat_taxon_id?: number;
+  /** Normalised observation popularity score (0–1), derived from iNat observations count */
+  popularity_score?: number;
   source: string;
   updated_at: string;
   score: number;
@@ -20,9 +26,25 @@ export type SpeciesSearchHit = {
   is_live_fallback: boolean;
 };
 
+/**
+ * Structured filter object produced by the NL query parser (Groq JSON-schema mode).
+ * All fields are optional — only those confidently parsed will be set.
+ * `text_remainder` holds any part of the query not mapped to a filter.
+ */
+export type StructuredFilters = {
+  habitat?: string;
+  diet?: string;
+  activityPattern?: string;
+  conservationStatus?: string;
+  continent?: string;
+  className?: string;
+  textRemainder?: string;
+};
+
 export type SearchResponse = {
   hits: SpeciesSearchHit[];
   used_live_fallback: boolean;
+  total_count?: number;
 };
 
 export type HydratedProfileResponse = {

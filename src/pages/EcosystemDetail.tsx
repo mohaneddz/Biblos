@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { AnimalCard } from "../components/AnimalCard";
 import { EcosystemCard } from "../components/EcosystemCard";
-import { GlobeGridIcon, LeafClusterIcon } from "../components/icons";
+import { BranchIcon, CompassIcon, EyeIcon, GlobeGridIcon, LeafClusterIcon, PawIcon } from "../components/icons";
 import { ecosystems, getEcosystemById } from "../data/ecosystems";
 import type { Ecosystem } from "../data/ecosystems";
 import { animals } from "../data/animals";
@@ -259,8 +259,11 @@ export default function EcosystemDetail() {
         {/* Left: description + highlights */}
         <div className="page-card rounded-[1.6rem] p-6 flex flex-col gap-5">
           <div>
-            <span className="text-xs uppercase tracking-[0.22em] text-app-accent">Overview</span>
-            <p className="mt-3 text-sm leading-7 text-app-text">{ecosystem.description}</p>
+            <div className="flex items-center gap-2 mb-2">
+              <EyeIcon className="h-4 w-4 text-app-accent" />
+              <span className="text-xs uppercase tracking-[0.22em] text-app-accent font-semibold">Overview</span>
+            </div>
+            <p className="mt-2 text-sm leading-7 text-app-text">{ecosystem.description}</p>
           </div>
           {summary?.extract && (
             <div>
@@ -363,7 +366,10 @@ export default function EcosystemDetail() {
         <section>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="page-section-title">Species in this Biome</h2>
+              <h2 className="page-section-title flex items-center gap-2">
+                <PawIcon className="h-5 w-5 text-app-accent" />
+                Species in this Biome
+              </h2>
               <p className="mt-1 text-sm text-app-muted">
                 {biomeSpecies.length} species from the Biblos directory match this biome's habitat tags.
               </p>
@@ -396,7 +402,10 @@ export default function EcosystemDetail() {
       {/* World Heatmap — full width */}
       <section>
         <div className="mb-5">
-          <h2 className="page-section-title">Global Distribution Heatmap</h2>
+          <h2 className="page-section-title flex items-center gap-2">
+            <GlobeGridIcon className="h-5 w-5 text-app-accent" />
+            Global Distribution Heatmap
+          </h2>
           <p className="mt-1 text-sm text-app-muted">
             Interactive world map showing the continents where {ecosystem.title} occurs. Hover over countries to explore. Use scroll or controls to zoom.
           </p>
@@ -411,7 +420,10 @@ export default function EcosystemDetail() {
       {relatedEcosystems.length > 0 && (
         <section>
           <div className="mb-5">
-            <h2 className="page-section-title">Related Biomes</h2>
+            <h2 className="page-section-title flex items-center gap-2">
+              <BranchIcon className="h-5 w-5 text-app-accent" />
+              Related Biomes
+            </h2>
             <p className="mt-1 text-sm text-app-muted">
               Ecosystems that share continents or habitat structure with {ecosystem.title}.
             </p>
@@ -426,7 +438,10 @@ export default function EcosystemDetail() {
 
       {/* Biome classification card */}
       <section className="page-card rounded-[1.75rem] p-6">
-        <h2 className="page-section-title mb-4">Biome Profile</h2>
+        <h2 className="page-section-title flex items-center gap-2 mb-4">
+          <CompassIcon className="h-5 w-5 text-app-accent" />
+          Biome Profile
+        </h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {[
             { label: "Climate", value: ecosystem.climate },

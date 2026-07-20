@@ -1,18 +1,21 @@
 /**
  * filterDiscovery.ts
  *
- * Triggered when active non-query filters produce sparse local results (< 5).
- * Asks the LLM to suggest matching species, resolves them via GBIF, fetches
- * Wikipedia summaries, and caches them as partial Animal profiles so they
- * immediately appear in the Species Directory grid.
+ * Triggered when non-query filters are active and local results are sparse (< 5).
+ * Uses the authoritative-first pipeline:
+ *   1. iNaturalist taxon search (ordered by observations_count) for common-name richness
+ *   2. GBIF strict match to canonicalise each candidate (rejects matchType=NONE)
+ *   3. Wikipedia summary + thumbnail enrichment
+ *   4. Cache as partial Animal profiles so they appear in the grid immediately
+ *
+ * NO AI CANDIDATE INVENTION: Groq never generates species names here.
+ * Every candidate must resolve through GBIF before being admitted.
  */
 
-import { getSettings } from "./cache";
-import { setCachedSpecies } from "./cache";
-import { getSpeciesSuggestionsFromAI } from "./aiSpeciesService";
-import { fetchGbifMatch } from "./gbifService";
+import { getSettings, setCachedSpecies } from "./cache";
+import { fetchGbifMatchStrict } from "./gbifService";
 import { reportError } from "./errorReporter";
-import type { SpeciesSearchHit } from "./speciesStore";
+import type { SpeciesSearchHit } from "../types/speciesStore";
 import type { Animal } from "../types/animal";
 
 export type FilterCriteria = {
@@ -38,27 +41,30 @@ function buildFilterKey(filters: FilterCriteria): string {
   });
 }
 
-function buildNaturalLanguageQuery(filters: FilterCriteria): string {
-  const parts: string[] = [];
-
-  if (filters.diet) parts.push(`${filters.diet} animals`);
-  else parts.push("animals");
-
-  if (filters.className) parts.push(`in the class ${filters.className}`);
-  if (filters.activityPattern) parts.push(`that are ${filters.activityPattern}`);
-  if (filters.habitat) parts.push(`found in ${filters.habitat}`);
-  if (filters.continent) parts.push(`native to ${filters.continent}`);
-  if (filters.conservationStatus) parts.push(`with conservation status ${filters.conservationStatus}`);
-
-  return parts.join(", ");
+/**
+ * Map filter criteria to an iNaturalist taxon query.
+ * iNat uses `iconic_taxon_name` for broad class grouping.
+ */
+function classToInatIconicName(className: string): string | undefined {
+  const lower = className.toLowerCase();
+  if (lower.includes("mammalia") || lower.includes("mammal")) return "Mammalia";
+  if (lower.includes("aves") || lower.includes("bird")) return "Aves";
+  if (lower.includes("reptil")) return "Reptilia";
+  if (lower.includes("amphibia")) return "Amphibia";
+  if (lower.includes("actinopter") || lower.includes("fish")) return "Actinopterygii";
+  if (lower.includes("insect") || lower.includes("arachn") || lower.includes("arthropod")) return "Insecta";
+  if (lower.includes("arachnida")) return "Arachnida";
+  return undefined;
 }
 
-async function fetchWikipediaSummary(commonName: string): Promise<{ extract: string; thumbnailUrl: string | null } | null> {
+async function fetchWikipediaSummary(
+  commonName: string,
+): Promise<{ extract: string; thumbnailUrl: string | null } | null> {
   try {
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(commonName)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
-    const data = await res.json() as { extract?: string; thumbnail?: { source?: string } };
+    const data = (await res.json()) as { extract?: string; thumbnail?: { source?: string } };
     return {
       extract: data.extract ?? "",
       thumbnailUrl: data.thumbnail?.source ?? null,
@@ -82,7 +88,8 @@ function buildPartialAnimalFromHit(
     shortDescription: wikiExtract
       ? wikiExtract.slice(0, 280)
       : `${hit.common_name ?? hit.canonical_name} — indexed via GBIF, pending full hydration.`,
-    detailedDescription: wikiExtract ?? "Open this entry to load the full profile from biodiversity sources.",
+    detailedDescription:
+      wikiExtract ?? "Open this entry to load the full profile from biodiversity sources.",
     coolFacts: [],
     classification: {
       kingdom: hit.kingdom ?? "Animalia",
@@ -108,57 +115,92 @@ function buildPartialAnimalFromHit(
   };
 }
 
-export async function discoverSpeciesByFilters(filters: FilterCriteria): Promise<SpeciesSearchHit[]> {
+export async function discoverSpeciesByFilters(
+  filters: FilterCriteria,
+): Promise<SpeciesSearchHit[]> {
+  // Only run when AI is enabled (uses iNat API freely, but respects the user's intent)
   const settings = getSettings();
-  if (!settings.aiEnabled || !settings.groqApiKey) return [];
+  if (!settings.aiEnabled) return [];
 
   // Don't re-fetch the same filter combination in the same session
   const key = buildFilterKey(filters);
+
   if (fetchedFilters.has(key)) return [];
   fetchedFilters.add(key);
 
-  const naturalQuery = buildNaturalLanguageQuery(filters);
-  if (!naturalQuery) return [];
-
   try {
-    // 1. Ask the LLM for species matching the filter criteria
-    const suggestions = await getSpeciesSuggestionsFromAI(
-      `List 12 real animal species that are ${naturalQuery}. Focus on species that match ALL of the given criteria.`
-    );
+    // 1. Build iNaturalist search URL using filter criteria
+    const params = new URLSearchParams({
+      per_page: "20",
+      order_by: "observations_count",
+      rank: "species",
+      taxon_id: "1", // Animalia root
+    });
 
-    if (suggestions.length === 0) return [];
+    // Map className to iNat iconic_taxon_name
+    const iconicName = filters.className ? classToInatIconicName(filters.className) : undefined;
+    if (iconicName) params.set("iconic_taxa", iconicName);
 
-    // 2. Resolve each suggestion to a GBIF taxon key + fetch Wikipedia summary in parallel
+    // Use habitat/activity as text hint (iNat doesn't filter these directly)
+    const textHint = [filters.habitat, filters.diet, filters.activityPattern, filters.continent]
+      .filter(Boolean)
+      .join(" ");
+
+    if (textHint) {
+      params.set("q", textHint);
+    } else if (!iconicName) {
+      // Nothing useful to query
+      return [];
+    }
+
+    const inatUrl = `https://api.inaturalist.org/v1/taxa?${params}`;
+    const inatRes = await fetch(inatUrl);
+    if (!inatRes.ok) return [];
+
+    const inatData = (await inatRes.json()) as {
+      results?: Array<{
+        name?: string;
+        preferred_common_name?: string;
+        id?: number;
+        iconic_taxon_name?: string;
+      }>;
+    };
+
+    const taxa = inatData.results ?? [];
+    if (taxa.length === 0) return [];
+
+    // 2. For each iNat taxon, validate through GBIF strict match
     const resolvedHits: SpeciesSearchHit[] = [];
 
     await Promise.allSettled(
-      suggestions.map(async ({ scientificName, commonName }) => {
+      taxa.map(async (taxon) => {
+        const scientificName = taxon.name;
+        const commonName = taxon.preferred_common_name ?? scientificName ?? "";
+        if (!scientificName) return;
+
         try {
+          // GBIF strict match — rejects matchType=NONE, ensures candidacy
           const [hit, wiki] = await Promise.all([
-            fetchGbifMatch(scientificName, commonName),
-            fetchWikipediaSummary(commonName),
+            fetchGbifMatchStrict(scientificName, commonName),
+            fetchWikipediaSummary(commonName || scientificName),
           ]);
 
-          if (!hit) return;
+          if (!hit) return; // rejected by GBIF — never enters results
 
           resolvedHits.push(hit);
 
-          // Build and cache a partial Animal profile so it shows up in the grid immediately
-          const partial = buildPartialAnimalFromHit(
-            hit,
-            wiki?.extract,
-            wiki?.thumbnailUrl,
-          );
+          // Build and cache a partial Animal profile for immediate grid display
+          const partial = buildPartialAnimalFromHit(hit, wiki?.extract, wiki?.thumbnailUrl);
           setCachedSpecies(partial);
         } catch (err) {
           console.debug(`[filter-discovery] Failed to resolve "${commonName}"`, err);
         }
-      })
+      }),
     );
 
     return resolvedHits;
   } catch (err) {
-    reportError(`Filter-based species discovery failed for query "${naturalQuery}"`, err);
+    reportError(`Filter-based species discovery failed`, err);
     return [];
   }
 }

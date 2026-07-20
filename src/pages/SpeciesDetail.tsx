@@ -36,6 +36,109 @@ function hasUnknownClassification(animal: Animal | null): boolean {
   );
 }
 
+function SpeciesDetailSkeleton() {
+  return (
+    <div className="page-frame space-y-4 animate-fade-in">
+      {/* Go Back button skeleton */}
+      <div className="fixed top-[5.5rem] left-8 lg:left-[20.5rem] z-50">
+        <div className="h-8 w-24 rounded-full bg-white/10 animate-pulse border border-white/10 backdrop-blur-md shadow-lg" />
+      </div>
+
+      {/* Hero Skeleton */}
+      <section className="page-card overflow-hidden rounded-[2rem]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,0.82fr)_minmax(22rem,1.18fr)]">
+          <div className="relative min-h-[18rem] md:min-h-[22rem] xl:min-h-[26rem] bg-white/5 animate-pulse overflow-hidden border-b border-white/8 xl:border-b-0 xl:border-r">
+            <div className="absolute bottom-6 left-6 right-6 space-y-3">
+              <div className="h-3 w-28 bg-white/10 rounded animate-pulse" />
+              <div className="h-8 w-3/4 bg-white/15 rounded animate-pulse" />
+              <div className="h-4 w-1/2 bg-white/10 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 p-5 xl:h-full justify-between min-h-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="stat-tile min-h-[6.5rem] p-5 flex flex-col justify-between">
+                  <div className="h-3 w-16 bg-white/10 animate-pulse rounded" />
+                  <div className="h-6 w-24 bg-white/15 animate-pulse rounded mt-3" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2.5 mt-3 p-1">
+              <div className="h-4 bg-white/10 animate-pulse rounded w-full" />
+              <div className="h-4 bg-white/10 animate-pulse rounded w-11/12" />
+              <div className="h-4 bg-white/10 animate-pulse rounded w-4/5" />
+              <div className="h-4 bg-white/10 animate-pulse rounded w-3/4" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Toolbar Skeleton */}
+      <section className="page-card rounded-[1.75rem] p-6">
+        <div className="flex flex-wrap gap-3">
+          <div className="h-10 w-44 rounded-xl bg-white/5 animate-pulse border border-white/5" />
+          <div className="h-10 w-40 rounded-xl bg-white/5 animate-pulse border border-white/5" />
+          <div className="h-10 w-36 rounded-xl bg-white/5 animate-pulse border border-white/5" />
+          <div className="h-10 w-36 rounded-xl bg-white/5 animate-pulse border border-white/5" />
+        </div>
+      </section>
+
+      {/* Stat Fact Grid Skeleton */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="page-card rounded-[1.5rem] p-5 space-y-3">
+            <div className="h-3 w-20 bg-white/10 animate-pulse rounded" />
+            <div className="h-6 w-28 bg-white/15 animate-pulse rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Classification & Notes Skeleton */}
+      <section className="grid gap-4 xl:grid-cols-[minmax(18rem,0.88fr)_minmax(0,1.12fr)]">
+        <div className="page-card rounded-[1.5rem] p-5 space-y-4">
+          <div className="h-5 w-36 bg-white/15 animate-pulse rounded" />
+          <div className="space-y-3 pt-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-white/5">
+                <div className="h-4 w-20 bg-white/10 animate-pulse rounded" />
+                <div className="h-4 w-28 bg-white/15 animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          <div className="page-card rounded-[1.5rem] p-5 space-y-3">
+            <div className="h-5 w-28 bg-white/15 animate-pulse rounded" />
+            <div className="space-y-2 pt-2">
+              <div className="h-4 bg-white/10 animate-pulse rounded w-full" />
+              <div className="h-4 bg-white/10 animate-pulse rounded w-11/12" />
+              <div className="h-4 bg-white/10 animate-pulse rounded w-3/4" />
+            </div>
+          </div>
+          <div className="page-card rounded-[1.5rem] p-5 space-y-3">
+            <div className="h-5 w-32 bg-white/15 animate-pulse rounded" />
+            <div className="space-y-2 pt-2">
+              <div className="h-10 bg-white/5 animate-pulse rounded-[1.2rem] w-full" />
+              <div className="h-10 bg-white/5 animate-pulse rounded-[1.2rem] w-11/12" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Reference Gallery Skeleton */}
+      <section className="page-card rounded-[1.5rem] p-5 space-y-4">
+        <div className="h-5 w-40 bg-white/15 animate-pulse rounded" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-[1.25rem] border border-white/8 bg-white/5 animate-pulse h-[15rem]" />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function SpeciesDetail() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
@@ -154,20 +257,7 @@ export default function SpeciesDetail() {
   }
 
   if (loading && !animal) {
-    return (
-      <div className="page-frame">
-        <section className="page-card rounded-[1.75rem] p-6">
-          <h1 className="page-title">
-            {id.startsWith("wiki-") ? "Fetching data..." : "Loading species profile..."}
-          </h1>
-          <p className="page-lede">
-            {id.startsWith("wiki-")
-              ? "This species was referenced by the AI Naturalist. Biblos is fetching its profile from Wikipedia and will cache it for instant access next time."
-              : "Biblos found the indexed species entry and is now assembling taxonomy, images, and readable facts from cached and live sources."}
-          </p>
-        </section>
-      </div>
-    );
+    return <SpeciesDetailSkeleton />;
   }
 
   if (!animal) {

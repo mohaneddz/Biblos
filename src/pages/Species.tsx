@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimalCard } from "../components/AnimalCard";
 import { SearchBar } from "../components/SearchBar";
@@ -6,10 +6,13 @@ import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
 import { getBookmarkedSpecies, getFavorites, getAllCachedSpecies, getHiddenSpecies } from "../services/cache";
 import { searchAnimals } from "../services/searchAnimals";
-import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, type SpeciesSearchHit } from "../services/speciesStore";
+import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, reciprocalRankFusion, type SpeciesSearchHit } from "../services/speciesStore";
 import { discoverSpeciesByFilters } from "../services/filterDiscovery";
+import { searchInatAutocomplete } from "../services/inatService";
+import { parseQueryToStructuredFilters } from "../services/aiSpeciesService";
 import type { Animal, Continent } from "../types/animal";
-import { RefreshIcon, AtlasIcon, CompassIcon, CopyIcon } from "../components/icons";
+import type { StructuredFilters } from "../types/speciesStore";
+import { RefreshIcon, CompassIcon, CopyIcon } from "../components/icons";
 import { reportError } from "../services/errorReporter";
 import { toastService } from "../services/toastService";
 import { PageHeader } from "../components/PageHeader";
@@ -18,42 +21,23 @@ function unique<T>(items: T[]) {
   return [...new Set(items)].sort();
 }
 
-/** Unified relevance score used when merging browse + indexed results. */
-function mergeRelevanceScore(animal: Animal, query: string): number {
-  const common = animal.commonName.toLowerCase();
-  const words = common.split(/\s+/);
-  let score = 0;
-
-  // Richness boost: fully-detailed entries rank above bare placeholders
-  const isRich = !animal.partial && animal.coolFacts.length > 0;
-  if (isRich) score += 100;
-
-  // Head-noun match: "Bengal Tiger" for query "tiger" → IS a tiger
-  if (common === query) {
-    score += 200;
-  } else if (words.length > 1 && words[words.length - 1] === query) {
-    score += 80;
-  } else if (common.startsWith(query)) {
-    score += 60;
-  } else if (words.includes(query)) {
-    score += 50;
-  } else if (common.includes(query)) {
-    score += 20;
-  }
-
-  return score;
-}
-
 export default function Species() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [storageVersion, setStorageVersion] = useState(0);
   const [queryDraft, setQueryDraft] = useState(searchParams.get("q") ?? "");
   const [indexedHits, setIndexedHits] = useState<SpeciesSearchHit[]>([]);
+  const [inatHits, setInatHits] = useState<SpeciesSearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [filterDiscoveryHits, setFilterDiscoveryHits] = useState<SpeciesSearchHit[]>([]);
   const [filterDiscoveryLoading, setFilterDiscoveryLoading] = useState(false);
-
+  const [page, setPage] = useState(1);
+  const [totalIndexedCount, setTotalIndexedCount] = useState(0);
+  /** Structured filters parsed from a natural-language query (>= 3 words) by Groq */
+  const [parsedFilters, setParsedFilters] = useState<StructuredFilters | null>(null);
+  const [parsedFiltersBanner, setParsedFiltersBanner] = useState(false);
+  /** Ref for iNat cleanup callback */
+  const inatCleanupRef = useRef<(() => void) | null>(null);
 
   const favorites = useMemo(() => getFavorites(), [storageVersion]);
   const bookmarks = useMemo(() => getBookmarkedSpecies(), [storageVersion]);
@@ -71,6 +55,11 @@ export default function Species() {
   useEffect(() => {
     setQueryDraft(filters.query);
   }, [filters.query]);
+
+  // Reset pagination on filter or query change
+  useEffect(() => {
+    setPage(1);
+  }, [filters.query, filters.className, filters.habitat, filters.diet, filters.activityPattern, filters.conservationStatus, filters.continent]);
 
   const useIndexedSearch = filters.query.trim().length > 0;
 
@@ -93,80 +82,127 @@ export default function Species() {
 
   const browseResults = useMemo(() => searchAnimals(allAvailableAnimals, filters), [allAvailableAnimals, filters]);
   const indexedResults = useMemo(() => indexedHits.map(previewAnimalFromHit), [indexedHits]);
+  const inatResults = useMemo(() => inatHits.map(previewAnimalFromHit), [inatHits]);
   const filterDiscoveryResults = useMemo(() => filterDiscoveryHits.map(previewAnimalFromHit), [filterDiscoveryHits]);
 
-  // browseResults (local + cached animals) are always available instantly.
-  // indexedResults (GBIF placeholders) are merged in as they arrive from the async search.
-  // This means the grid is NEVER empty while a query is active — local matches show up
-  // immediately on every keystroke, and GBIF hits appear on top once fetched.
+  /**
+   * Merge all result sources using Reciprocal Rank Fusion.
+   *
+   * Pipeline:
+   *   browseResults   → local FTS5 + Levenshtein (always instant, includes cached)
+   *   indexedResults  → backend GBIF/FTS5 search hits
+   *   inatResults     → iNaturalist autocomplete (validated via GBIF match)
+   *   filterDiscovery → iNat-sourced hits validated through GBIF for active filters
+   *
+   * Constraints:
+   *   - Filters are HARD constraints: any hit failing an active filter is excluded.
+   *   - Profile richness (non-partial, has coolFacts) only breaks ties at equal RRF score.
+   *   - Popularity (iNat observations count) adds a small boost via the RRF formula.
+   *   - Exact lexical matches always float to the top regardless of source.
+   */
   const results = useMemo(() => {
-    let rawResults: Animal[] = [];
-    const seenIds = new Set<string>();
-    const seenNames = new Set<string>();
-
     if (useIndexedSearch) {
-      // 1. Add browseResults first (fully detailed static / cached entries)
-      for (const animal of browseResults) {
+      // Build per-source ranked lists for RRF
+      const browseHits = browseResults.map((a): SpeciesSearchHit => ({
+        id: a.id,
+        gbif_taxon_key: a.gbifTaxonKey ?? 0,
+        scientific_name: a.scientificName,
+        canonical_name: a.scientificName,
+        common_name: a.commonName,
+        aliases: [],
+        inat_taxon_id: undefined,
+        popularity_score: 0,
+        rank: "SPECIES",
+        kingdom: a.classification.kingdom || null,
+        phylum: a.classification.phylum || null,
+        class_name: a.classification.className || null,
+        order_name: a.classification.order || null,
+        family: a.classification.family || null,
+        genus: a.classification.genus || null,
+        source: "local",
+        updated_at: a.lastFetchedAt ?? new Date().toISOString(),
+        // Exact match detection for sort stability: richness only breaks RRF ties
+        score: a.partial ? 0 : (a.coolFacts.length > 0 ? 1 : 0.5),
+        match_reason: "local",
+        is_live_fallback: false,
+      }));
+
+      // RRF merge: local, GBIF-indexed, iNat, filter-discovery
+      const merged = reciprocalRankFusion([
+        browseHits,
+        indexedHits,
+        inatHits,
+        filterDiscoveryHits,
+      ]);
+
+      // Convert back to Animals, resolving full profiles from cache where available
+      const seenIds = new Set<string>();
+      const rawResults: Animal[] = [];
+
+      for (const hit of merged) {
+        if (seenIds.has(hit.id)) continue;
+        seenIds.add(hit.id);
+
+        // Prefer fully-hydrated cached/local Animal over bare placeholder
+        const localAnimal =
+          allAvailableAnimals.find((a) => a.id === hit.id) ?? null;
+        const animal = localAnimal ?? previewAnimalFromHit(hit);
+
+        // Profile richness tiebreaker: if a local rich profile exists, use it
         rawResults.push(animal);
-        seenIds.add(animal.id);
-        seenNames.add(animal.scientificName.toLowerCase());
-        if (animal.commonName) seenNames.add(animal.commonName.toLowerCase());
       }
 
-      // 2. Add indexedResults (placeholders) if not already represented
+      return rawResults;
+    } else {
+      // Browse mode (no text query) — combine indexed database species for this page + static/cached animals
+      const seenIds = new Set<string>();
+      const seenNames = new Set<string>();
+      const rawResults: Animal[] = [];
+
       for (const animal of indexedResults) {
         const sciLower = animal.scientificName.toLowerCase();
-        const comLower = animal.commonName.toLowerCase();
-        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
+        const comLower = animal.commonName ? animal.commonName.toLowerCase() : "";
+        if (seenIds.has(animal.id) || (sciLower && seenNames.has(sciLower)) || (comLower && seenNames.has(comLower))) continue;
         rawResults.push(animal);
         seenIds.add(animal.id);
-        seenNames.add(sciLower);
-        seenNames.add(comLower);
+        if (sciLower) seenNames.add(sciLower);
+        if (comLower) seenNames.add(comLower);
       }
 
-      // 3. Add filter-discovery results (AI-suggested from filter criteria)
-      for (const animal of filterDiscoveryResults) {
-        const sciLower = animal.scientificName.toLowerCase();
-        const comLower = animal.commonName.toLowerCase();
-        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
-        rawResults.push(animal);
-        seenIds.add(animal.id);
-        seenNames.add(sciLower);
-        seenNames.add(comLower);
-      }
-
-      // 4. Sort merged results by unified relevance score
-      const q = filters.query.trim().toLowerCase();
-      if (q) {
-        rawResults.sort((a, b) => {
-          const scoreA = mergeRelevanceScore(a, q);
-          const scoreB = mergeRelevanceScore(b, q);
-          if (scoreA !== scoreB) return scoreB - scoreA;
-          return a.commonName.localeCompare(b.commonName);
-        });
-      }
-    } else {
-      // Browse mode: start from local matches
       for (const animal of browseResults) {
+        const sciLower = animal.scientificName.toLowerCase();
+        const comLower = animal.commonName ? animal.commonName.toLowerCase() : "";
+        if (seenIds.has(animal.id) || (sciLower && seenNames.has(sciLower)) || (comLower && seenNames.has(comLower))) continue;
         rawResults.push(animal);
         seenIds.add(animal.id);
-        seenNames.add(animal.scientificName.toLowerCase());
-        if (animal.commonName) seenNames.add(animal.commonName.toLowerCase());
+        if (sciLower) seenNames.add(sciLower);
+        if (comLower) seenNames.add(comLower);
       }
-      // Merge filter discovery hits that aren't already present
+
       for (const animal of filterDiscoveryResults) {
         const sciLower = animal.scientificName.toLowerCase();
-        const comLower = animal.commonName.toLowerCase();
-        if (seenIds.has(animal.id) || seenNames.has(sciLower) || seenNames.has(comLower)) continue;
+        const comLower = animal.commonName ? animal.commonName.toLowerCase() : "";
+        if (seenIds.has(animal.id) || (sciLower && seenNames.has(sciLower)) || (comLower && seenNames.has(comLower))) continue;
         rawResults.push(animal);
         seenIds.add(animal.id);
-        seenNames.add(sciLower);
-        seenNames.add(comLower);
+        if (sciLower) seenNames.add(sciLower);
+        if (comLower) seenNames.add(comLower);
       }
-    }
 
-    return rawResults;
-  }, [useIndexedSearch, indexedResults, filterDiscoveryResults, browseResults, filters]);
+      return rawResults;
+    }
+  }, [
+    useIndexedSearch,
+    indexedHits,
+    inatHits,
+    filterDiscoveryHits,
+    browseResults,
+    indexedResults,
+    inatResults,
+    filterDiscoveryResults,
+    allAvailableAnimals,
+    filters,
+  ]);
 
   const effectiveQuery = queryDraft.trim() || filters.query.trim();
   const typingAhead = queryDraft !== filters.query;
@@ -197,6 +233,29 @@ export default function Species() {
 
   function clearFilters() {
     setSearchParams(new URLSearchParams());
+  }
+
+  function applyParsedFilters() {
+    if (!parsedFilters) return;
+    const next = new URLSearchParams(searchParams);
+    if (parsedFilters.className) next.set("class", parsedFilters.className);
+    if (parsedFilters.habitat) next.set("habitat", parsedFilters.habitat);
+    if (parsedFilters.diet) next.set("diet", parsedFilters.diet);
+    if (parsedFilters.activityPattern) next.set("activity", parsedFilters.activityPattern);
+    if (parsedFilters.conservationStatus) next.set("status", parsedFilters.conservationStatus);
+    if (parsedFilters.continent) next.set("continent", parsedFilters.continent);
+
+    if (parsedFilters.textRemainder) {
+      next.set("q", parsedFilters.textRemainder);
+      setQueryDraft(parsedFilters.textRemainder);
+    } else {
+      next.delete("q");
+      setQueryDraft("");
+    }
+
+    setSearchParams(next);
+    setParsedFiltersBanner(false);
+    toastService.success("AI parsed filters applied!");
   }
 
   function bumpStorage() {
@@ -273,7 +332,7 @@ export default function Species() {
     return () => window.removeEventListener("biblos-cache-updated", handler);
   }, []);
 
-  // Filter-driven AI discovery: when a non-text filter is active and local results are sparse
+  // Filter-driven iNat discovery: when non-text filters are active and local results are sparse
   const hasNonQueryFilter = !!(filters.className || filters.habitat || filters.diet || filters.activityPattern || filters.conservationStatus || filters.continent);
   useEffect(() => {
     if (!hasNonQueryFilter) {
@@ -301,31 +360,77 @@ export default function Species() {
     return () => { active = false; };
   }, [filters.className, filters.habitat, filters.diet, filters.activityPattern, filters.conservationStatus, filters.continent, hasNonQueryFilter]);
 
-
-
+  // NL query parsing: when query looks like a phrase (>= 3 words), parse into structured filters
   useEffect(() => {
-    if (!useIndexedSearch) {
-      setIndexedHits([]);
-      setSearchLoading(false);
+    const q = filters.query.trim();
+    const words = q.split(/\s+/).filter(Boolean);
+    if (words.length < 3) {
+      setParsedFilters(null);
+      setParsedFiltersBanner(false);
       return;
     }
 
     let active = true;
-    // Run immediately on the next microtask tick — no debounce delay needed since
-    // browseResults are already shown synchronously and this only adds GBIF placeholders.
-    setSearchLoading(true);
-    console.info("[species-search] local search started", { query: filters.query });
+    void parseQueryToStructuredFilters(q).then((result) => {
+      if (!active || !result) return;
+      // Only show banner if any filter was parsed
+      const hasAnyFilter = Object.entries(result)
+        .filter(([k]) => k !== "text_remainder")
+        .some(([, v]) => Boolean(v));
+      if (hasAnyFilter) {
+        setParsedFilters(result);
+        setParsedFiltersBanner(true);
+      }
+    });
 
-    void searchSpeciesLocal(filters.query, 24)
+    return () => { active = false; };
+  }, [filters.query]);
+
+  // iNaturalist autocomplete: runs on every committed query (debounced in service)
+  useEffect(() => {
+    if (inatCleanupRef.current) {
+      inatCleanupRef.current();
+      inatCleanupRef.current = null;
+    }
+
+    const q = filters.query.trim();
+    if (!q) {
+      setInatHits([]);
+      return;
+    }
+
+    const cleanup = searchInatAutocomplete(q, (hits) => {
+      setInatHits(hits);
+    }, 20);
+
+    inatCleanupRef.current = cleanup;
+
+    return () => {
+      cleanup();
+      inatCleanupRef.current = null;
+    };
+  }, [filters.query]);
+
+
+
+
+  useEffect(() => {
+    let active = true;
+    setSearchLoading(true);
+    console.info("[species-search] local search started", { query: filters.query, page });
+
+    const offset = (page - 1) * 36;
+    void searchSpeciesLocal(filters.query, 36, offset)
       .then((response) => {
         if (!active) {
           return;
         }
         setIndexedHits(response.hits);
+        setTotalIndexedCount(response.total_count ?? response.hits.length);
         console.info("[species-search] local search finished", {
           query: filters.query,
           hits: response.hits.length,
-          usedLiveFallback: response.used_live_fallback,
+          total: response.total_count,
         });
       })
       .finally(() => {
@@ -337,7 +442,7 @@ export default function Species() {
     return () => {
       active = false;
     };
-  }, [filters.query, useIndexedSearch]);
+  }, [filters.query, page]);
 
   return (
     <div className="page-frame">
@@ -350,7 +455,9 @@ export default function Species() {
       <section className="page-card rounded-[1.75rem] p-6 mt-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="tag-chip">{visibleResults.length} matches</span>
+            <span className="tag-chip">
+              {totalIndexedCount > 0 ? `${totalIndexedCount} indexed species` : `${visibleResults.length} matches`}
+            </span>
             {visibleFavoritesCount > 0 ? <span className="tag-chip">{visibleFavoritesCount} favorites</span> : null}
             {visibleBookmarksCount > 0 ? <span className="tag-chip">{visibleBookmarksCount} bookmarks</span> : null}
 
@@ -363,20 +470,6 @@ export default function Species() {
               >
                 <RefreshIcon className="h-4.5 w-4.5" />
               </button>
-              <Link
-                to="/explorer"
-                className="ghost-button p-2 rounded-xl min-h-0 text-app-muted hover:text-app-accent hover:border-app-accent/30 transition cursor-pointer"
-                title="Open explorer shortcuts"
-              >
-                <AtlasIcon className="h-4.5 w-4.5" />
-              </Link>
-              <Link
-                to="/explorer"
-                className="ghost-button p-2 rounded-xl min-h-0 text-app-muted hover:text-app-accent hover:border-app-accent/30 transition cursor-pointer"
-                title="Browse regional routes"
-              >
-                <CompassIcon className="h-4.5 w-4.5" />
-              </Link>
             </div>
           </div>
         </div>
@@ -398,7 +491,44 @@ export default function Species() {
           />
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        {parsedFiltersBanner && parsedFilters && (
+          <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-2xl border border-app-accent/20 bg-app-accent/5 p-4 text-sm text-app-soft transition animate-fade-in">
+            <div className="flex items-center gap-2">
+              <CompassIcon className="h-5 w-5 text-app-accent flex-shrink-0" />
+              <div>
+                <span className="font-semibold text-app-text">AI Query Parser:</span> Detected filters for {" "}
+                <span className="font-medium text-app-accent">
+                  {[
+                    parsedFilters.className && `Class: ${parsedFilters.className}`,
+                    parsedFilters.habitat && `Habitat: ${parsedFilters.habitat}`,
+                    parsedFilters.diet && `Diet: ${parsedFilters.diet}`,
+                    parsedFilters.activityPattern && `Activity: ${parsedFilters.activityPattern}`,
+                    parsedFilters.conservationStatus && `Status: ${parsedFilters.conservationStatus}`,
+                    parsedFilters.continent && `Continent: ${parsedFilters.continent}`,
+                  ].filter(Boolean).join(", ")}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end md:self-auto">
+              <button
+                type="button"
+                onClick={applyParsedFilters}
+                className="rounded-lg bg-app-accent/20 px-3 py-1.5 font-medium text-app-accent hover:bg-app-accent/30 transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
+              <button
+                type="button"
+                onClick={() => setParsedFiltersBanner(false)}
+                className="rounded-lg hover:bg-white/5 px-2 py-1.5 text-app-muted hover:text-app-text transition cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 min-w-0 w-full">
           {[
             { key: "class", label: "Class", current: filters.className, options: classes },
             { key: "habitat", label: "Habitat", current: filters.habitat, options: habitats },
@@ -407,12 +537,12 @@ export default function Species() {
             { key: "status", label: "Status", current: filters.conservationStatus, options: statuses },
             { key: "continent", label: "Continent", current: filters.continent, options: continents },
           ].map(({ key, label, current, options }) => (
-            <label key={key} className="grid gap-2 text-sm text-app-muted">
-              <span>{label}</span>
+            <label key={key} className="flex flex-col gap-1.5 text-xs font-medium text-app-muted min-w-0">
+              <span className="truncate">{label}</span>
               <select
                 value={current}
                 onChange={(event) => setFilter(key, event.target.value)}
-                className="rounded-[1rem] border border-white/8 bg-black/25 px-4 py-3 text-app-text"
+                className="w-full min-w-0 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-2.5 text-sm text-app-text truncate focus:border-app-accent/40 focus:outline-none cursor-pointer"
               >
                 <option value="">All</option>
                 {options.map((option) => (
@@ -486,6 +616,67 @@ export default function Species() {
               />
             ))}
           </section>
+
+          {/* Pagination Bar for batch browsing */}
+          {totalIndexedCount > 36 && (
+            <section className="page-card rounded-[1.5rem] p-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-app-muted">
+                Showing <span className="font-semibold text-white">{(page - 1) * 36 + 1}</span>–
+                <span className="font-semibold text-white">{Math.min(page * 36, totalIndexedCount)}</span> of{" "}
+                <span className="font-semibold text-app-accent">{totalIndexedCount}</span> indexed species
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="ghost-button px-3.5 py-1.5 text-xs disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                >
+                  ← Previous
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(7, Math.ceil(totalIndexedCount / 36)) }, (_, i) => {
+                    const totalPages = Math.ceil(totalIndexedCount / 36);
+                    let pageNum = i + 1;
+                    if (totalPages > 7) {
+                      if (page > 4 && page < totalPages - 3) {
+                        pageNum = page - 3 + i;
+                      } else if (page >= totalPages - 3) {
+                        pageNum = totalPages - 6 + i;
+                      }
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => { setPage(pageNum); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        className={[
+                          "h-8 w-8 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-center",
+                          page === pageNum
+                            ? "bg-app-accent text-white font-bold shadow-md"
+                            : "hover:bg-white/10 text-app-muted hover:text-white",
+                        ].join(" ")}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={page * 36 >= totalIndexedCount}
+                  onClick={() => { setPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="ghost-button px-3.5 py-1.5 text-xs disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                >
+                  Next →
+                </button>
+              </div>
+            </section>
+          )}
+
           <div className="flex justify-center mt-6">
             <button
               type="button"
@@ -493,7 +684,7 @@ export default function Species() {
               className="ghost-button"
             >
               <CopyIcon className="h-5 w-5 text-app-accent" />
-              <span>Copy Results</span>
+              <span>Copy Page Results</span>
             </button>
           </div>
         </>

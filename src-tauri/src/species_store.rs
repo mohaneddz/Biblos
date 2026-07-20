@@ -30,6 +30,12 @@ pub struct SpeciesSearchHit {
     pub order_name: Option<String>,
     pub family: Option<String>,
     pub genus: Option<String>,
+    /// Alternate vernacular names / synonyms (populated from iNaturalist or GBIF vernacularNames)
+    pub aliases: Vec<String>,
+    /// iNaturalist taxon ID — None when the hit was not sourced from iNaturalist
+    pub inat_taxon_id: Option<i64>,
+    /// Popularity score normalised to 0-1 from iNat observations count
+    pub popularity_score: f64,
     pub source: String,
     pub updated_at: String,
     pub score: f64,
@@ -37,10 +43,31 @@ pub struct SpeciesSearchHit {
     pub is_live_fallback: bool,
 }
 
+/// Result type for the `parse_query_to_filters` command.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StructuredFilters {
+    pub habitat: Option<String>,
+    pub diet: Option<String>,
+    pub activity_pattern: Option<String>,
+    pub conservation_status: Option<String>,
+    pub continent: Option<String>,
+    pub class_name: Option<String>,
+    pub text_remainder: Option<String>,
+}
+
+/// Result type for the `search_inat_autocomplete` command.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InatAutocompleteResponse {
+    pub hits: Vec<SpeciesSearchHit>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub hits: Vec<SpeciesSearchHit>,
     pub used_live_fallback: bool,
+    #[serde(default)]
+    pub total_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,6 +191,8 @@ struct INaturalistTaxon {
     preferred_common_name: Option<String>,
     iconic_taxon_name: Option<String>,
     default_photo: Option<INaturalistPhoto>,
+    #[serde(default)]
+    observations_count: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -197,6 +226,10 @@ struct IndexRecord {
     scientific_name: String,
     canonical_name: String,
     common_name: Option<String>,
+    /// Tab-separated alternate names stored in DB, split on read
+    aliases: Vec<String>,
+    inat_taxon_id: Option<i64>,
+    popularity_score: f64,
     rank: String,
     kingdom: Option<String>,
     phylum: Option<String>,
@@ -225,7 +258,17 @@ pub fn db_path_for_app(app: Option<&AppHandle>) -> Result<PathBuf> {
             .app_local_data_dir()
             .map_err(|error| anyhow!("failed to resolve app data dir: {error}"))?;
         fs::create_dir_all(&dir)?;
-        return Ok(dir.join("biblos.sqlite3"));
+        let target_path = dir.join("biblos.sqlite3");
+        let bundled_path = PathBuf::from("src-tauri").join("biblos.sqlite3");
+
+        if bundled_path.exists() {
+            let bundled_size = fs::metadata(&bundled_path).map(|m| m.len()).unwrap_or(0);
+            let target_size = fs::metadata(&target_path).map(|m| m.len()).unwrap_or(0);
+            if bundled_size > target_size {
+                let _ = fs::copy(&bundled_path, &target_path);
+            }
+        }
+        return Ok(target_path);
     }
 
     let path = PathBuf::from("src-tauri").join("biblos.sqlite3");
@@ -233,9 +276,7 @@ pub fn db_path_for_app(app: Option<&AppHandle>) -> Result<PathBuf> {
         fs::create_dir_all(parent)?;
     }
     Ok(path)
-}
-
-fn open_connection(path: &Path) -> Result<Connection> {
+}fn open_connection(path: &Path) -> Result<Connection> {
     let connection = Connection::open(path)?;
     connection.execute_batch(
         "
@@ -266,37 +307,82 @@ fn open_connection(path: &Path) -> Result<Connection> {
           full_json TEXT NOT NULL,
           hydrated_at TEXT NOT NULL
         );
+        ",
+    )?;
 
+    // Backwards-compatible column migrations — SQLite ignores duplicate ADD COLUMN errors.
+    for sql in [
+        "ALTER TABLE species_index ADD COLUMN aliases TEXT",
+        "ALTER TABLE species_index ADD COLUMN inat_taxon_id INTEGER",
+        "ALTER TABLE species_index ADD COLUMN popularity_score REAL DEFAULT 0.0",
+    ] {
+        let _ = connection.execute(sql, []);
+    }
+
+    connection.execute_batch(
+        "
         CREATE VIRTUAL TABLE IF NOT EXISTS species_index_fts USING fts5(
           id UNINDEXED,
           scientific_name,
           canonical_name,
           common_name,
+          aliases,
           class_name,
           family,
           genus,
-          tokenize = 'unicode61'
+          tokenize = 'unicode61 remove_diacritics 1'
         );
 
         CREATE TRIGGER IF NOT EXISTS species_index_ai AFTER INSERT ON species_index BEGIN
-          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
-          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name, coalesce(new.common_name, ''), coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
+          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
+          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name,
+                  coalesce(new.common_name, ''), coalesce(new.aliases, ''),
+                  coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
         END;
 
         CREATE TRIGGER IF NOT EXISTS species_index_ad AFTER DELETE ON species_index BEGIN
-          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
-          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name, coalesce(old.common_name, ''), coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
+          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name,
+                 coalesce(old.common_name, ''), coalesce(old.aliases, ''),
+                 coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
         END;
 
         CREATE TRIGGER IF NOT EXISTS species_index_au AFTER UPDATE ON species_index BEGIN
-          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
-          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name, coalesce(old.common_name, ''), coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
-          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, class_name, family, genus)
-          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name, coalesce(new.common_name, ''), coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
+          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
+          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name,
+                 coalesce(old.common_name, ''), coalesce(old.aliases, ''),
+                 coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+          INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
+          VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name,
+                  coalesce(new.common_name, ''), coalesce(new.aliases, ''),
+                  coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
         END;
         ",
     )?;
     Ok(connection)
+}
+
+/// HTTP GET with exponential back-off on 429 / 503 responses.
+/// Attempts: immediate, +1 s, +3 s.
+async fn get_with_retry(client: &Client, url: &str) -> Result<reqwest::Response> {
+    let delays_ms: &[u64] = &[0, 1000, 3000];
+    let mut last_err: anyhow::Error = anyhow!("no attempts made");
+    for (attempt, &delay) in delays_ms.iter().enumerate() {
+        if delay > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+        }
+        match client.get(url).send().await {
+            Ok(resp) if resp.status().as_u16() == 429 || resp.status().as_u16() == 503 => {
+                last_err = anyhow!("rate-limited (attempt {}): {}", attempt + 1, resp.status());
+                continue;
+            }
+            Ok(resp) => return Ok(resp),
+            Err(err) => {
+                last_err = err.into();
+            }
+        }
+    }
+    Err(last_err)
 }
 
 fn make_species_id(gbif_taxon_key: i64) -> String {
@@ -328,41 +414,59 @@ fn fts_query(query: &str) -> String {
 }
 
 fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, String) {
-  let q = normalize(query);
-  let common = record.common_name.as_deref().map(normalize).unwrap_or_default();
-  let scientific = normalize(&record.scientific_name);
-  let canonical = normalize(&record.canonical_name);
+    let q = normalize(query);
+    let common = record.common_name.as_deref().map(normalize).unwrap_or_default();
+    let scientific = normalize(&record.scientific_name);
+    let canonical = normalize(&record.canonical_name);
 
     if !common.is_empty() && common == q {
-      return (300.0, "exact_common".into());
+        return (300.0, "exact_common".into());
     }
     if scientific == q || canonical == q {
-      return (260.0, "exact_scientific".into());
+        return (260.0, "exact_scientific".into());
     }
+
+    // Check alias exact match (synonyms, alternate vernacular names)
+    for alias in &record.aliases {
+        let alias_norm = normalize(alias);
+        if !alias_norm.is_empty() && alias_norm == q {
+            return (280.0, "exact_alias".into());
+        }
+    }
+
     if !common.is_empty() && common.starts_with(&q) {
         return (220.0, "prefix_common".into());
     }
     if scientific.starts_with(&q) || canonical.starts_with(&q) {
-      return (200.0, "prefix_scientific".into());
+        return (200.0, "prefix_scientific".into());
+    }
+    // Alias prefix match
+    for alias in &record.aliases {
+        let alias_norm = normalize(alias);
+        if !alias_norm.is_empty() && alias_norm.starts_with(&q) {
+            return (190.0, "prefix_alias".into());
+        }
     }
 
-    let fuzzy = best_similarity(
-        &q,
-        &[
-            &common,
-            &scientific,
-            &canonical,
-            record.family.as_deref().unwrap_or(""),
-            record.genus.as_deref().unwrap_or(""),
-            record.class_name.as_deref().unwrap_or(""),
-        ],
-    );
+    let alias_refs: Vec<&str> = record.aliases.iter().map(|a| a.as_str()).collect();
+    let mut fuzzy_candidates = vec![
+        common.as_str(),
+        scientific.as_str(),
+        canonical.as_str(),
+        record.family.as_deref().unwrap_or(""),
+        record.genus.as_deref().unwrap_or(""),
+        record.class_name.as_deref().unwrap_or(""),
+    ];
+    fuzzy_candidates.extend_from_slice(&alias_refs);
+
+    let fuzzy = best_similarity(&q, &fuzzy_candidates);
     let token_bonus = q
         .split_whitespace()
         .filter(|token| !token.is_empty())
         .map(|token| {
             let token = token.trim();
-            if common.contains(token) || scientific.contains(token) || canonical.contains(token) {
+            let alias_hit = record.aliases.iter().any(|a| normalize(a).contains(token));
+            if common.contains(token) || scientific.contains(token) || canonical.contains(token) || alias_hit {
                 0.12
             } else {
                 0.0
@@ -417,11 +521,22 @@ fn levenshtein(a: &str, b: &str) -> usize {
 }
 
 fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
+    let aliases_raw: Option<String> = row.get("aliases").unwrap_or(None);
+    let aliases = aliases_raw
+        .as_deref()
+        .unwrap_or("")
+        .split('\t')
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
     Ok(IndexRecord {
         gbif_taxon_key: row.get("gbif_taxon_key")?,
         scientific_name: row.get("scientific_name")?,
         canonical_name: row.get("canonical_name")?,
         common_name: row.get("common_name")?,
+        aliases,
+        inat_taxon_id: row.get("inat_taxon_id").unwrap_or(None),
+        popularity_score: row.get::<_, Option<f64>>("popularity_score").unwrap_or(None).unwrap_or(0.0),
         rank: row.get("rank")?,
         kingdom: row.get("kingdom")?,
         phylum: row.get("phylum")?,
@@ -441,6 +556,9 @@ fn to_search_hit(record: IndexRecord, score: f64, match_reason: String, is_live_
         scientific_name: record.scientific_name,
         canonical_name: record.canonical_name,
         common_name: record.common_name,
+        aliases: record.aliases,
+        inat_taxon_id: record.inat_taxon_id,
+        popularity_score: record.popularity_score,
         rank: record.rank,
         kingdom: record.kingdom,
         phylum: record.phylum,
@@ -510,16 +628,21 @@ pub fn initialize_database(app: Option<&AppHandle>) -> Result<PathBuf> {
 }
 
 fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result<()> {
+    let aliases_str = record.aliases.join("\t");
     connection.execute(
         "
         INSERT INTO species_index (
-          id, gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+          id, gbif_taxon_key, scientific_name, canonical_name, common_name, aliases,
+          inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
         ON CONFLICT(gbif_taxon_key) DO UPDATE SET
           id = excluded.id,
           scientific_name = excluded.scientific_name,
           canonical_name = excluded.canonical_name,
-          common_name = excluded.common_name,
+          common_name = coalesce(excluded.common_name, species_index.common_name),
+          aliases = case when excluded.aliases != '' then excluded.aliases else species_index.aliases end,
+          inat_taxon_id = coalesce(excluded.inat_taxon_id, species_index.inat_taxon_id),
+          popularity_score = case when excluded.popularity_score > 0 then excluded.popularity_score else species_index.popularity_score end,
           rank = excluded.rank,
           kingdom = excluded.kingdom,
           phylum = excluded.phylum,
@@ -536,6 +659,9 @@ fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result
             record.scientific_name,
             record.canonical_name,
             record.common_name,
+            if aliases_str.is_empty() { None } else { Some(aliases_str) },
+            record.inat_taxon_id,
+            record.popularity_score,
             record.rank,
             record.kingdom,
             record.phylum,
@@ -555,11 +681,27 @@ fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>
     let scientific_name = item.scientific_name.clone()?;
     let canonical_name = item.canonical_name.clone().unwrap_or_else(|| scientific_name.clone());
 
+    // Collect all vernacular names as aliases (excluding the preferred common name already stored)
+    let preferred = common_name.as_deref().map(|s| s.to_lowercase());
+    let aliases: Vec<String> = item
+        .vernacular_names
+        .iter()
+        .filter_map(|entry| entry.vernacular_name.as_deref().map(|s| s.trim().to_owned()))
+        .filter(|name| !name.is_empty())
+        .filter(|name| preferred.as_deref() != Some(&name.to_lowercase()))
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .take(10)
+        .collect();
+
     Some(IndexRecord {
         gbif_taxon_key,
         scientific_name,
         canonical_name,
         common_name,
+        aliases,
+        inat_taxon_id: None,
+        popularity_score: 0.0,
         rank: item.rank.clone().unwrap_or_else(|| "SPECIES".into()),
         kingdom: item.kingdom.clone(),
         phylum: item.phylum.clone(),
@@ -587,21 +729,206 @@ fn preferred_common_name(item: &GbifSpeciesSearchItem) -> Option<String> {
 pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> {
     let path = initialize_database(app)?;
     let connection = open_connection(&path)?;
-    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let client = Client::builder().user_agent("Biblos/0.1 (contact@biblos.app)").build()?;
     let mut seen = HashSet::new();
-    let mut inserted = 0usize;
-    let mut offset = 0usize;
+    let mut inserted: usize;
 
+    // Load existing keys from database so we don't re-fetch
+    {
+        let mut stmt = connection.prepare("SELECT gbif_taxon_key FROM species_index")?;
+        let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+        for r in rows {
+            if let Ok(key) = r {
+                seen.insert(key);
+            }
+        }
+        inserted = seen.len();
+        println!("Database currently has {} species indexed. Target: {}", inserted, limit);
+        if inserted >= limit {
+            return Ok(inserted);
+        }
+    }
+
+    // Phase 1: Seed from iNaturalist top observed animal taxa (most famous/observed species first)
+    let per_page = 100;
+    let mut page = 1;
+    let max_pages = 25;
+
+    while inserted < limit && page <= max_pages {
+        let url = format!(
+            "https://api.inaturalist.org/v1/taxa?taxon_id=1&rank=species&order_by=observations_count&per_page={}&page={}",
+            per_page, page
+        );
+
+        let resp = match get_with_retry(&client, &url).await {
+            Ok(r) if r.status().is_success() => r,
+            _ => {
+                page += 1;
+                continue;
+            }
+        };
+
+        let inat_data: INaturalistSearchResponse = match resp.json().await {
+            Ok(d) => d,
+            Err(_) => {
+                page += 1;
+                continue;
+            }
+        };
+
+        if inat_data.results.is_empty() {
+            break;
+        }
+
+        let max_obs = inat_data
+            .results
+            .iter()
+            .filter_map(|t| t.observations_count)
+            .max()
+            .unwrap_or(1)
+            .max(1) as f64;
+
+        for taxon in inat_data.results {
+            let scientific_name = match taxon.name.as_deref() {
+                Some(s) if !s.is_empty() => s.to_owned(),
+                _ => continue,
+            };
+            let common_name = taxon.preferred_common_name.clone();
+            // High quality filter: require a common name!
+            let Some(ref c_name) = common_name else {
+                continue;
+            };
+            if c_name.trim().is_empty() {
+                continue;
+            }
+
+            let obs_count = taxon.observations_count.unwrap_or(0);
+            let popularity = (obs_count as f64 / max_obs).clamp(0.0, 1.0);
+
+            // GBIF strict match to get canonical taxonomy & usage key
+            let gbif_url = format!(
+                "https://api.gbif.org/v1/species/match?name={}&kingdom=Animalia",
+                urlencoding::encode(&scientific_name)
+            );
+            let gbif_resp = match get_with_retry(&client, &gbif_url).await {
+                Ok(r) if r.status().is_success() => r,
+                _ => continue,
+            };
+            let gbif_data: serde_json::Value = match gbif_resp.json().await {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+
+            let match_type = gbif_data.get("matchType").and_then(|v| v.as_str()).unwrap_or("NONE");
+            if match_type == "NONE" {
+                continue;
+            }
+
+            let gbif_kingdom = gbif_data.get("kingdom").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+            if !gbif_kingdom.is_empty() && gbif_kingdom != "animalia" {
+                continue;
+            }
+
+            let gbif_taxon_key = match gbif_data.get("usageKey").and_then(|v| v.as_i64()) {
+                Some(k) if k > 0 => k,
+                _ => continue,
+            };
+
+            if !seen.insert(gbif_taxon_key) {
+                continue;
+            }
+
+            let canonical = gbif_data
+                .get("canonicalName")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&scientific_name)
+                .to_owned();
+            let sci_name = gbif_data
+                .get("scientificName")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&scientific_name)
+                .to_owned();
+
+            let mut aliases: Vec<String> = vec![];
+            aliases.push(c_name.clone());
+            if let Some(icon) = &taxon.iconic_taxon_name {
+                if !icon.is_empty() {
+                    aliases.push(icon.clone());
+                }
+            }
+            aliases.dedup();
+
+            let class_name = gbif_data.get("class").and_then(|v| v.as_str()).map(ToOwned::to_owned).or_else(|| {
+                let order = gbif_data.get("order").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                if ["carnivora", "primates", "rodentia", "cetacea", "chiroptera", "artiodactyla", "perissodactyla", "diprotodontia", "eulipotyphla", "lagomorpha", "proboscidea"].contains(&order.as_str()) {
+                    Some("Mammalia".into())
+                } else if ["passeriformes", "accipitriformes", "falconiformes", "anseriformes", "columbiformes", "psittaciformes", "charadriiformes", "pelecaniformes", "sphenisciformes", "strigiformes"].contains(&order.as_str()) {
+                    Some("Aves".into())
+                } else if ["squamata", "testudines", "crocodilia"].contains(&order.as_str()) {
+                    Some("Reptilia".into())
+                } else if ["anura", "caudata"].contains(&order.as_str()) {
+                    Some("Amphibia".into())
+                } else if ["perciformes", "cypriniformes", "siluriformes", "salmoniformes"].contains(&order.as_str()) {
+                    Some("Actinopterygii".into())
+                } else {
+                    Some("Mammalia".into())
+                }
+            });
+
+            let record = IndexRecord {
+                gbif_taxon_key,
+                scientific_name: sci_name,
+                canonical_name: canonical,
+                common_name: Some(c_name.clone()),
+                aliases,
+                inat_taxon_id: taxon.id,
+                popularity_score: popularity,
+                rank: "SPECIES".into(),
+                kingdom: gbif_data.get("kingdom").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                phylum: gbif_data.get("phylum").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                class_name,
+                order_name: gbif_data.get("order").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                family: gbif_data.get("family").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                genus: gbif_data.get("genus").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                source: "iNaturalist".into(),
+                updated_at: Utc::now().to_rfc3339(),
+            };
+
+            if upsert_species_index(&connection, &record).is_ok() {
+                inserted += 1;
+                if inserted % 25 == 0 || inserted >= limit {
+                    println!("--> Progress: indexed {}/{} high-quality species", inserted, limit);
+                }
+                if inserted >= limit {
+                    break;
+                }
+            }
+        }
+        page += 1;
+    }
+
+    // Phase 2: If we still need more, query GBIF search but filter strictly for items with common names
+    let mut offset = 0usize;
     while inserted < limit {
         let batch_limit = SEED_PAGE_SIZE.min(limit - inserted);
         let url = format!(
             "https://api.gbif.org/v1/species/search?kingdom=Animalia&rank=SPECIES&status=ACCEPTED&limit={batch_limit}&offset={offset}"
         );
-        let response = client.get(url).send().await?;
-        if !response.status().is_success() {
-            return Err(anyhow!("GBIF seed request failed with status {}", response.status()));
-        }
-        let payload: GbifSearchResponse = response.json().await?;
+        let response = match get_with_retry(&client, &url).await {
+            Ok(r) if r.status().is_success() => r,
+            _ => {
+                offset += batch_limit;
+                continue;
+            }
+        };
+        let payload: GbifSearchResponse = match response.json().await {
+            Ok(p) => p,
+            Err(_) => {
+                offset += batch_limit;
+                continue;
+            }
+        };
+
         if payload.results.is_empty() {
             break;
         }
@@ -617,11 +944,20 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
             }
 
             let common_name = preferred_common_name(&item);
+            // Require common name for high quality!
+            if common_name.is_none() {
+                continue;
+            }
+
             if let Some(record) = gbif_item_to_record(&item, common_name) {
-                upsert_species_index(&connection, &record)?;
-                inserted += 1;
-                if inserted >= limit {
-                    break;
+                if upsert_species_index(&connection, &record).is_ok() {
+                    inserted += 1;
+                    if inserted % 25 == 0 || inserted >= limit {
+                        println!("--> Progress: indexed {}/{} high-quality species", inserted, limit);
+                    }
+                    if inserted >= limit {
+                        break;
+                    }
                 }
             }
         }
@@ -629,34 +965,52 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
         offset += fetched_count;
     }
 
+    println!("Seeding completed! Successfully indexed {} high-quality species into {}", inserted, path.display());
+
+    // Also copy to AppData local directory if it exists so the running Tauri app sees all 1000 items!
+    if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
+        for app_dir_name in ["com.biblos.app", "tauri-playtoys", "com.tauri-playtoys.dev", "biblos"] {
+            let target_dir = PathBuf::from(&appdata).join(app_dir_name);
+            if target_dir.exists() {
+                let target_file = target_dir.join("biblos.sqlite3");
+                let _ = std::fs::copy(&path, &target_file);
+                println!("Synced database to {}", target_file.display());
+            }
+        }
+    }
+
     Ok(inserted)
 }
 
-fn local_fts_search(connection: &Connection, query: &str, limit: usize) -> Result<Vec<SpeciesSearchHit>> {
+fn local_fts_search(connection: &Connection, query: &str, limit: usize, offset: usize) -> Result<(Vec<SpeciesSearchHit>, usize)> {
+    let total_count: usize = connection
+        .query_row("SELECT COUNT(*) FROM species_index", [], |row| row.get(0))
+        .unwrap_or(0);
+
     if query.trim().is_empty() {
         let mut stmt = connection.prepare(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
             FROM species_index
-            ORDER BY common_name IS NULL, common_name ASC, scientific_name ASC
-            LIMIT ?1
+            ORDER BY popularity_score DESC, common_name IS NULL, common_name ASC, scientific_name ASC
+            LIMIT ?1 OFFSET ?2
             ",
         )?;
 
-        let rows = stmt.query_map(params![limit as i64], row_to_record)?;
+        let rows = stmt.query_map(params![limit as i64, offset as i64], row_to_record)?;
         let mut hits = Vec::new();
         for row in rows {
             let record = row?;
             hits.push(to_search_hit(record, 0.0, "browse".into(), false));
         }
-        return Ok(hits);
+        return Ok((hits, total_count));
     }
 
     let mut results = Vec::new();
     let fts = fts_query(query);
     let mut stmt = connection.prepare(
         "
-        SELECT si.gbif_taxon_key, si.scientific_name, si.canonical_name, si.common_name, si.rank, si.kingdom, si.phylum, si.class_name, si.order_name, si.family, si.genus, si.source, si.updated_at, bm25(species_index_fts) AS rank_score
+        SELECT si.gbif_taxon_key, si.scientific_name, si.canonical_name, si.common_name, si.aliases, si.inat_taxon_id, si.popularity_score, si.rank, si.kingdom, si.phylum, si.class_name, si.order_name, si.family, si.genus, si.source, si.updated_at, bm25(species_index_fts) AS rank_score
         FROM species_index_fts
         JOIN species_index si ON si.rowid = species_index_fts.rowid
         WHERE species_index_fts MATCH ?1
@@ -677,14 +1031,11 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize) -> Resul
     if results.is_empty() {
         let mut fallback_stmt = connection.prepare(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
             FROM species_index
-            WHERE scientific_name LIKE ?1 OR canonical_name LIKE ?1 OR common_name LIKE ?1 OR genus LIKE ?1 OR family LIKE ?1
-            LIMIT 250
             ",
         )?;
-        let like_query = format!("%{}%", query.trim());
-        let rows = fallback_stmt.query_map(params![like_query], row_to_record)?;
+        let rows = fallback_stmt.query_map([], row_to_record)?;
         for row in rows {
             let record = row?;
             let similarity = best_similarity(
@@ -704,17 +1055,23 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize) -> Resul
     }
 
     let mut results = dedupe_search_hits(results);
-    results.truncate(limit);
-    Ok(results)
+    let search_total = results.len();
+    if offset < results.len() {
+        results = results.into_iter().skip(offset).take(limit).collect();
+    } else {
+        results.clear();
+    }
+    Ok((results, search_total))
 }
 
-pub fn search_index(app: Option<&AppHandle>, query: &str, limit: usize) -> Result<SearchResponse> {
+pub fn search_index(app: Option<&AppHandle>, query: &str, limit: usize, offset: usize) -> Result<SearchResponse> {
     let path = initialize_database(app)?;
     let connection = open_connection(&path)?;
-    let hits = local_fts_search(&connection, query, limit)?;
+    let (hits, total_count) = local_fts_search(&connection, query, limit, offset)?;
     Ok(SearchResponse {
         hits,
         used_live_fallback: false,
+        total_count,
     })
 }
 
@@ -742,10 +1099,11 @@ pub async fn live_search_fallback(app: Option<&AppHandle>, query: &str, limit: u
         return Ok(SearchResponse {
             hits: Vec::new(),
             used_live_fallback: false,
+            total_count: 0,
         });
     }
 
-    let local = search_index(app, trimmed, limit)?;
+    let local = search_index(app, trimmed, limit, 0)?;
     let strong_local = local.hits.first().map(|hit| hit.score >= 180.0).unwrap_or(false);
     if strong_local || !local.hits.is_empty() {
         return Ok(local);
@@ -776,9 +1134,11 @@ pub async fn live_search_fallback(app: Option<&AppHandle>, query: &str, limit: u
     let mut hits = dedupe_search_hits(hits);
     hits.truncate(limit);
 
+    let hits_len = hits.len();
     Ok(SearchResponse {
         hits,
         used_live_fallback: true,
+        total_count: hits_len,
     })
 }
 
@@ -788,6 +1148,7 @@ pub async fn lookup_and_store_species(app: Option<&AppHandle>, query: &str, limi
         return Ok(SearchResponse {
             hits: Vec::new(),
             used_live_fallback: false,
+            total_count: 0,
         });
     }
 
@@ -801,7 +1162,7 @@ pub async fn lookup_and_store_species(app: Option<&AppHandle>, query: &str, limi
     );
     let response = client.get(url).send().await?;
     if !response.status().is_success() {
-        return search_index(app, trimmed, limit);
+        return search_index(app, trimmed, limit, 0);
     }
 
     let payload: GbifSearchResponse = response.json().await?;
@@ -814,9 +1175,11 @@ pub async fn lookup_and_store_species(app: Option<&AppHandle>, query: &str, limi
     let mut hits = dedupe_search_hits(hits);
     hits.truncate(limit);
 
+    let hits_len = hits.len();
     Ok(SearchResponse {
         hits,
         used_live_fallback: false,
+        total_count: hits_len,
     })
 }
 
@@ -1187,7 +1550,7 @@ fn get_index_record(connection: &Connection, gbif_taxon_key: i64) -> Result<Opti
     connection
         .query_row(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
             FROM species_index
             WHERE gbif_taxon_key = ?1
             ",
@@ -1279,4 +1642,280 @@ pub fn list_profiles_by_ids(app: Option<&AppHandle>, ids: &[String]) -> Result<V
         }
     }
     Ok(animals)
+}
+
+// ── iNaturalist autocomplete ──────────────────────────────────────────────────
+
+/// Queries the iNaturalist taxa autocomplete API, canonicalises each result
+/// through the GBIF match endpoint (strict: rejects matchType=NONE), upserts
+/// the resolved records into the local species index, and returns ranked hits.
+///
+/// This is the authoritative-first path: iNat provides common-name richness
+/// and popularity signals, GBIF provides canonical taxonomy.
+pub async fn search_inat_autocomplete(
+    app: Option<&AppHandle>,
+    query: &str,
+    limit: usize,
+) -> Result<InatAutocompleteResponse> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(InatAutocompleteResponse { hits: vec![] });
+    }
+
+    let path = initialize_database(app)?;
+    let connection = open_connection(&path)?;
+    let client = Client::builder().user_agent("Biblos/0.1 (contact@biblos.app)").build()?;
+
+    // 1. Query iNaturalist autocomplete — ordered by observations_count descending
+    let inat_url = format!(
+        "https://api.inaturalist.org/v1/taxa?q={}&taxon_id=1&per_page={}&order_by=observations_count&rank=species,subspecies",
+        urlencoding::encode(trimmed),
+        limit.min(30)
+    );
+
+    let inat_resp = match get_with_retry(&client, &inat_url).await {
+        Ok(r) if r.status().is_success() => r,
+        _ => return Ok(InatAutocompleteResponse { hits: vec![] }),
+    };
+
+    let inat_data: INaturalistSearchResponse = match inat_resp.json().await {
+        Ok(d) => d,
+        Err(_) => return Ok(InatAutocompleteResponse { hits: vec![] }),
+    };
+
+    // Normalise observations count for popularity score
+    let max_obs = inat_data
+        .results
+        .iter()
+        .filter_map(|t| t.observations_count)
+        .max()
+        .unwrap_or(1)
+        .max(1) as f64;
+
+
+    // 2. For each iNat taxon, canonicalise via GBIF match (reject NONE matches)
+    let mut hits: Vec<SpeciesSearchHit> = vec![];
+
+
+    for (rank_idx, taxon) in inat_data.results.into_iter().take(limit).enumerate() {
+        let scientific_name = match taxon.name.as_deref() {
+            Some(s) if !s.is_empty() => s.to_owned(),
+            _ => continue,
+        };
+        let common_name = taxon.preferred_common_name.clone();
+        let inat_id = taxon.id;
+        let obs_count = taxon.observations_count.unwrap_or(0);
+        let popularity = (obs_count as f64 / max_obs).clamp(0.0, 1.0);
+
+        // GBIF strict match
+        let gbif_url = format!(
+            "https://api.gbif.org/v1/species/match?name={}&kingdom=Animalia",
+            urlencoding::encode(&scientific_name)
+        );
+        let gbif_resp = match get_with_retry(&client, &gbif_url).await {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        let gbif_data: serde_json::Value = match gbif_resp.json().await {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        // Reject unresolved matches
+        let match_type = gbif_data.get("matchType").and_then(|v| v.as_str()).unwrap_or("NONE");
+        if match_type == "NONE" {
+            continue;
+        }
+
+        let gbif_kingdom = gbif_data.get("kingdom").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+        if !gbif_kingdom.is_empty() && gbif_kingdom != "animalia" {
+            continue;
+        }
+
+        let gbif_taxon_key = match gbif_data.get("usageKey").and_then(|v| v.as_i64()) {
+            Some(k) if k > 0 => k,
+            _ => continue,
+        };
+
+        let canonical = gbif_data
+            .get("canonicalName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&scientific_name)
+            .to_owned();
+        let sci_name = gbif_data
+            .get("scientificName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&scientific_name)
+            .to_owned();
+
+        // Build aliases: include iNat common name if different from GBIF vernacular
+        let mut aliases: Vec<String> = vec![];
+        if let Some(ref cn) = common_name {
+            aliases.push(cn.clone());
+        }
+        if let Some(icon) = &taxon.iconic_taxon_name {
+            if !icon.is_empty() {
+                aliases.push(icon.clone());
+            }
+        }
+        aliases.dedup();
+
+        let record = IndexRecord {
+            gbif_taxon_key,
+            scientific_name: sci_name.clone(),
+            canonical_name: canonical.clone(),
+            common_name: common_name.clone(),
+            aliases: aliases.clone(),
+            inat_taxon_id: inat_id,
+            popularity_score: popularity,
+            rank: "SPECIES".into(),
+            kingdom: gbif_data.get("kingdom").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            phylum: gbif_data.get("phylum").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            class_name: gbif_data.get("class").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            order_name: gbif_data.get("order").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            family: gbif_data.get("family").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            genus: gbif_data.get("genus").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            source: "iNaturalist".into(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        let _ = upsert_species_index(&connection, &record);
+
+        let (score, match_reason) = score_local_hit(&record, trimmed, (limit - rank_idx) as f64);
+        // Boost by popularity (up to +30 points) — only breaks ties, never outranks exact match
+        let final_score = score + popularity * 30.0;
+
+        hits.push(SpeciesSearchHit {
+            id: make_species_id(gbif_taxon_key),
+            gbif_taxon_key,
+            scientific_name: sci_name,
+            canonical_name: canonical,
+            common_name: common_name.clone(),
+            aliases,
+            inat_taxon_id: inat_id,
+            popularity_score: popularity,
+            rank: "SPECIES".into(),
+            kingdom: record.kingdom,
+            phylum: record.phylum,
+            class_name: record.class_name,
+            order_name: record.order_name,
+            family: record.family,
+            genus: record.genus,
+            source: "iNaturalist".into(),
+            updated_at: record.updated_at,
+            score: final_score,
+            match_reason,
+            is_live_fallback: true,
+        });
+    }
+
+    // Apply lexical deduplication (same species key)
+    let hits = dedupe_search_hits(hits);
+    Ok(InatAutocompleteResponse { hits })
+}
+
+// ── Natural-language query parser (Groq JSON-schema mode) ────────────────────
+
+/// Parses a natural-language query (e.g. "small nocturnal desert animal") into
+/// structured filter fields using Groq's JSON-schema structured output mode.
+///
+/// IMPORTANT: This function **never** invents or suggests species names.
+/// Its sole purpose is to convert user intent into filter constraints that the
+/// authoritative search pipeline (FTS5 + GBIF + iNat) can apply.
+///
+/// Returns `StructuredFilters::default()` (all None) on error or for short queries.
+pub async fn parse_query_to_filters(
+    query: &str,
+    groq_api_key: Option<String>,
+    model: Option<String>,
+) -> Result<StructuredFilters> {
+    let trimmed = query.trim();
+    // Only activate for phrases that look like natural language (>= 3 words, no binomial)
+    let word_count = trimmed.split_whitespace().count();
+    let looks_binomial = trimmed.contains(' ') && trimmed.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
+    if word_count < 3 || looks_binomial {
+        return Ok(StructuredFilters {
+            text_remainder: Some(trimmed.to_owned()),
+            ..Default::default()
+        });
+    }
+
+    dotenvy::dotenv().ok();
+    let api_key = groq_api_key
+        .filter(|k| !k.trim().is_empty())
+        .or_else(|| std::env::var("GROQ_API_KEY").ok())
+        .filter(|k| !k.trim().is_empty());
+
+    let Some(api_key) = api_key else {
+        return Ok(StructuredFilters {
+            text_remainder: Some(trimmed.to_owned()),
+            ..Default::default()
+        });
+    };
+
+    let selected_model = model
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| "llama-3.3-70b-versatile".to_owned());
+
+    let system_prompt = "You are a taxonomy filter parser. Your ONLY job is to extract filter constraints from the user query. \
+        You MUST NOT suggest, invent, or name any species. Return ONLY a JSON object with these optional string keys: \
+        habitat (e.g. 'Desert', 'Ocean'), diet (one of: Carnivore, Herbivore, Omnivore, Detritivore, Filter Feeder, Scavenger, Planktivore), \
+        activityPattern (one of: Diurnal, Nocturnal, Crepuscular, Cathemeral), \
+        conservationStatus (one of: Least Concern, Near Threatened, Vulnerable, Endangered, Critically Endangered, Extinct), \
+        continent (e.g. 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Australia', 'Antarctica', 'Oceans'), \
+        className (e.g. 'Mammalia', 'Aves', 'Reptilia'), \
+        text_remainder (any part of the query not mapped to a filter). Omit keys you are not confident about.";
+
+    let body = json!({
+        "model": selected_model,
+        "temperature": 0.0,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": format!("Parse this query into filters: \"{}\"", trimmed) }
+        ]
+    });
+
+    let client = Client::builder().user_agent("Biblos/0.1").build()?;
+    let resp = client
+        .post("https://api.groq.com/openai/v1/chat/completions")
+        .bearer_auth(&api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| anyhow!("Groq request failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Ok(StructuredFilters {
+            text_remainder: Some(trimmed.to_owned()),
+            ..Default::default()
+        });
+    }
+
+    let payload: GroqChatResponse = resp.json().await.map_err(|e| anyhow!("Groq parse error: {e}"))?;
+    let content = payload
+        .choices
+        .into_iter()
+        .next()
+        .and_then(|c| c.message.content)
+        .unwrap_or_default();
+
+    let data: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+
+    fn opt_str(v: &serde_json::Value, key: &str) -> Option<String> {
+        v.get(key)
+            .and_then(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned)
+    }
+
+    Ok(StructuredFilters {
+        habitat: opt_str(&data, "habitat"),
+        diet: opt_str(&data, "diet"),
+        activity_pattern: opt_str(&data, "activityPattern"),
+        conservation_status: opt_str(&data, "conservationStatus"),
+        continent: opt_str(&data, "continent"),
+        class_name: opt_str(&data, "className"),
+        text_remainder: opt_str(&data, "text_remainder").or_else(|| Some(trimmed.to_owned())),
+    })
 }
