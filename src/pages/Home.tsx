@@ -5,9 +5,10 @@ import { SearchBar } from "../components/SearchBar";
 import { SpeciesImage } from "../components/SpeciesImage";
 import { animalMap, animals } from "../data/animals";
 import { ecosystems, getFeaturedEcosystemSpecies } from "../data/ecosystems";
-import { getRecentlyViewedAnimals, getBookmarkedSpecies, getFavorites, getHiddenSpecies } from "../services/cache";
+import { getRecentlyViewedAnimals, getBookmarkedSpecies, getFavorites, getHiddenSpecies, getAllCachedSpecies } from "../services/cache";
+import type { Animal } from "../types/animal";
 import { useWikipediaSummaries } from "../services/wikipedia";
-import { BookmarkSolidIcon, HeartSolidIcon } from "../components/icons";
+import { BookmarkSolidIcon, HeartSolidIcon, SunIcon, SparklesIcon, RefreshIcon } from "../components/icons";
 
 const quickActions = [
   ["/species", "Species Directory", "Search and filter the full local species index."],
@@ -20,6 +21,10 @@ export default function Home() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [storageVersion, setStorageVersion] = useState(0);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [factOffset, setFactOffset] = useState(0);
+  const [biomeOffset, setBiomeOffset] = useState(0);
+  const [speciesOffset, setSpeciesOffset] = useState(0);
 
   useEffect(() => {
     const handler = () => setStorageVersion((v) => v + 1);
@@ -29,27 +34,77 @@ export default function Home() {
 
   const hidden = useMemo(() => getHiddenSpecies(), [storageVersion]);
 
+  const allAvailableAnimals = useMemo(() => {
+    const cached = getAllCachedSpecies();
+    const map = new Map<string, Animal>();
+    for (const a of animals) if (!hidden.includes(a.id)) map.set(a.id, a);
+    for (const a of cached) if (!hidden.includes(a.id)) map.set(a.id, a);
+    return [...map.values()];
+  }, [hidden, storageVersion]);
+
+  // Deterministic seed for today's date: YYYY-MM-DD
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }, []);
+
+  // Animal of the Day: stays the whole day based on today's date hash (or refreshes on click)
   const animalOfDay = useMemo(() => {
-    const visible = animals.filter((a) => !hidden.includes(a.id));
-    if (visible.length === 0) return animals[0];
-    const dayIndex = new Date().getDate() % visible.length;
-    return visible[dayIndex];
-  }, [hidden]);
+    if (allAvailableAnimals.length === 0) return animals[0];
+    let hash = 0;
+    for (let i = 0; i < todayStr.length; i++) {
+      hash = (hash << 5) - hash + todayStr.charCodeAt(i);
+      hash |= 0;
+    }
+    const index = Math.abs(hash + dayOffset) % allAvailableAnimals.length;
+    return allAvailableAnimals[index];
+  }, [allAvailableAnimals, todayStr, dayOffset]);
+
+  // Cool Animal Fact: picks a different animal with unique facts for today (or refreshes on click)
+  const coolFactAnimal = useMemo(() => {
+    if (allAvailableAnimals.length <= 1) return allAvailableAnimals[0] ?? animals[0];
+    const factSeed = todayStr + "-cool-fact-seed";
+    let hash = 0;
+    for (let i = 0; i < factSeed.length; i++) {
+      hash = (hash << 5) - hash + factSeed.charCodeAt(i);
+      hash |= 0;
+    }
+    const candidates = allAvailableAnimals.filter(
+      (a) => a.id !== animalOfDay.id && (a.coolFacts.length > 0 || a.detailedDescription.length > 40)
+    );
+    const pool = candidates.length > 0 ? candidates : allAvailableAnimals.filter((a) => a.id !== animalOfDay.id);
+    const index = Math.abs(hash + factOffset) % pool.length;
+    return pool[index];
+  }, [allAvailableAnimals, animalOfDay, todayStr, factOffset]);
+
+  const coolFact = useMemo(() => {
+    if (!coolFactAnimal) return "";
+    if (coolFactAnimal.coolFacts && coolFactAnimal.coolFacts.length > 0) {
+      const factIndex = Math.abs(todayStr.length + factOffset) % coolFactAnimal.coolFacts.length;
+      return coolFactAnimal.coolFacts[factIndex];
+    }
+    return coolFactAnimal.shortDescription || coolFactAnimal.detailedDescription;
+  }, [coolFactAnimal, todayStr, factOffset]);
 
   const recentlyViewed = useMemo(() => {
     return getRecentlyViewedAnimals()
       .filter((animal) => !hidden.includes(animal.id))
       .slice(0, 3);
-  }, [hidden]);
+  }, [hidden, storageVersion]);
 
-  const featuredEcosystems = ecosystems.slice(0, 3);
+  const featuredEcosystems = useMemo(() => {
+    const start = (biomeOffset * 3) % ecosystems.length;
+    return [...ecosystems.slice(start, start + 3), ...ecosystems.slice(0, Math.max(0, start + 3 - ecosystems.length))].slice(0, 3);
+  }, [biomeOffset]);
 
   const featuredSpecies = useMemo(() => {
-    return animals
+    const endangered = animals
       .filter((animal) => !hidden.includes(animal.id))
-      .filter((animal) => animal.conservationStatus === "Endangered" || animal.conservationStatus === "Critically Endangered")
-      .slice(0, 3);
-  }, [hidden]);
+      .filter((animal) => animal.conservationStatus === "Endangered" || animal.conservationStatus === "Critically Endangered");
+    if (endangered.length === 0) return animals.slice(0, 3);
+    const start = (speciesOffset * 3) % endangered.length;
+    return [...endangered.slice(start, start + 3), ...endangered.slice(0, Math.max(0, start + 3 - endangered.length))].slice(0, 3);
+  }, [hidden, speciesOffset]);
 
   const biomeSummaries = useWikipediaSummaries(featuredEcosystems.map((ecosystem) => ecosystem.articleTitle));
 
@@ -115,26 +170,48 @@ export default function Home() {
       </section>
 
       <section className="page-grid page-grid-3">
-        <div className="page-card rounded-[1.75rem] p-5">
-          <h2 className="page-section-title">Animal of the Day</h2>
-          <div className="mt-4 relative overflow-hidden rounded-[1.5rem] border border-white/8">
-            <SpeciesImage animal={animalOfDay} className="h-52 w-full" fitClassName="h-52 w-full object-cover" />
-            <div className="absolute right-4 top-4 flex gap-2 z-10">
-              {getFavorites().includes(animalOfDay.id) && (
-                <div className="rounded-full bg-black/60 p-2 text-app-accent border border-white/10 shadow-lg" title="Favorite">
-                  <HeartSolidIcon className="h-4 w-4" />
-                </div>
-              )}
-              {getBookmarkedSpecies().includes(animalOfDay.id) && (
-                <div className="rounded-full bg-black/60 p-2 text-app-accent border border-white/10 shadow-lg" title="Bookmarked">
-                  <BookmarkSolidIcon className="h-4 w-4" />
-                </div>
-              )}
+        {/* Card 1: Animal of the Day */}
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <h2 className="page-section-title flex items-center gap-2">
+                <SunIcon className="h-5 w-5 text-app-accent" />
+                Animal of the Day
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDayOffset((o) => o + 1)}
+                  className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer"
+                  title="Shuffle Animal of the Day"
+                >
+                  <RefreshIcon className="h-3 w-3" />
+                  <span>Refresh</span>
+                </button>
+                <span className="rounded-full bg-app-accent/15 border border-app-accent/30 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-widest text-app-accent">
+                  Today
+                </span>
+              </div>
             </div>
+            <div className="mt-4 relative overflow-hidden rounded-[1.5rem] border border-white/8">
+              <SpeciesImage animal={animalOfDay} className="h-52 w-full" fitClassName="h-52 w-full object-cover" />
+              <div className="absolute right-4 top-4 flex gap-2 z-10">
+                {getFavorites().includes(animalOfDay.id) && (
+                  <div className="rounded-full bg-black/60 p-2 text-app-accent border border-white/10 shadow-lg" title="Favorite">
+                    <HeartSolidIcon className="h-4 w-4" />
+                  </div>
+                )}
+                {getBookmarkedSpecies().includes(animalOfDay.id) && (
+                  <div className="rounded-full bg-black/60 p-2 text-app-accent border border-white/10 shadow-lg" title="Bookmarked">
+                    <BookmarkSolidIcon className="h-4 w-4" />
+                  </div>
+                )}
+              </div>
+            </div>
+            <h3 className="mt-4 text-2xl font-semibold text-white">{animalOfDay.commonName}</h3>
+            <p className="mt-1 italic text-app-muted text-sm">{animalOfDay.scientificName}</p>
+            <p className="mt-3 text-sm leading-7 text-app-muted line-clamp-3">{animalOfDay.shortDescription}</p>
           </div>
-          <h3 className="mt-4 text-2xl font-semibold text-white">{animalOfDay.commonName}</h3>
-          <p className="mt-1 italic text-app-muted">{animalOfDay.scientificName}</p>
-          <p className="mt-3 text-sm leading-7 text-app-muted">{animalOfDay.shortDescription}</p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link to={`/species/${animalOfDay.id}`} className="primary-button text-sm">
               Open record
@@ -145,36 +222,91 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="page-card rounded-[1.75rem] p-5">
-          <h2 className="page-section-title">Recently Viewed</h2>
-          <div className="mt-4 grid gap-3">
-            {recentlyViewed.length > 0 ? (
-              recentlyViewed.map((animal) => (
-                <Link key={animal.id} to={`/species/${animal.id}`} className="interactive-card rounded-[1.2rem] border border-white/7 bg-white/[0.03] p-4">
-                  <p className="font-semibold text-white">{animal.commonName}</p>
-                  <p className="mt-1 text-sm italic text-app-muted">{animal.scientificName}</p>
-                </Link>
-              ))
-            ) : (
-              <p className="text-sm leading-7 text-app-muted">
-                Open species records and they will appear here, alongside your evolving collection workflow.
-              </p>
-            )}
+        {/* Card 2: Cool Animal Fact */}
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <h2 className="page-section-title flex items-center gap-2">
+                <SparklesIcon className="h-5 w-5 text-app-accent" />
+                Cool Animal Fact
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFactOffset((o) => o + 1)}
+                  className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer"
+                  title="Shuffle Cool Fact"
+                >
+                  <RefreshIcon className="h-3 w-3" />
+                  <span>Refresh</span>
+                </button>
+                <span className="rounded-full bg-white/10 border border-white/15 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-widest text-app-soft">
+                  Unique
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 relative overflow-hidden rounded-[1.5rem] border border-white/8">
+              <SpeciesImage animal={coolFactAnimal} className="h-52 w-full" fitClassName="h-52 w-full object-cover" />
+            </div>
+            <h3 className="mt-4 text-xl font-semibold text-white">{coolFactAnimal.commonName}</h3>
+            <p className="mt-0.5 italic text-app-muted text-xs">{coolFactAnimal.scientificName}</p>
+            
+            <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft">
+              <span className="font-semibold text-app-accent block mb-1">Did you know?</span>
+              "{coolFact}"
+            </div>
+          </div>
+          <div className="mt-5">
+            <Link to={`/species/${coolFactAnimal.id}`} className="ghost-button text-sm w-full flex items-center justify-center gap-2">
+              <SparklesIcon className="h-4 w-4 text-app-accent" />
+              Explore {coolFactAnimal.commonName}
+            </Link>
           </div>
         </div>
 
-        <div className="page-card rounded-[1.75rem] p-5">
-          <h2 className="page-section-title">Collection Snapshot</h2>
-          <div className="mt-4 grid gap-3">
-            <div className="stat-tile">
-              <span className="stat-label">Directory size</span>
-              <strong>{animals.length} species</strong>
+        {/* Card 3: Collection Snapshot & Recently Viewed */}
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <h2 className="page-section-title flex items-center gap-2">
+                <BookmarkSolidIcon className="h-5 w-5 text-app-accent" />
+                Recently Viewed
+              </h2>
+              <button
+                type="button"
+                onClick={() => setStorageVersion((v) => v + 1)}
+                className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer"
+                title="Reload recent collection"
+              >
+                <RefreshIcon className="h-3 w-3" />
+                <span>Refresh</span>
+              </button>
             </div>
-            <div className="stat-tile">
-              <span className="stat-label">Biome library</span>
-              <strong>{ecosystems.length} ecosystem records</strong>
+            <div className="mt-4 grid gap-3">
+              {recentlyViewed.length > 0 ? (
+                recentlyViewed.map((animal) => (
+                  <Link key={animal.id} to={`/species/${animal.id}`} className="interactive-card rounded-[1.2rem] border border-white/7 bg-white/[0.03] p-3.5 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-white text-sm">{animal.commonName}</p>
+                      <p className="text-xs italic text-app-muted">{animal.scientificName}</p>
+                    </div>
+                    <span className="text-xs text-app-accent">View →</span>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-app-muted">
+                  Open species records and they will appear here automatically.
+                </p>
+              )}
             </div>
-            <Link to="/collection" className="ghost-button text-sm">
+          </div>
+
+          <div className="mt-6 border-t border-white/8 pt-4">
+            <div className="stat-tile p-3">
+              <span className="stat-label">Species Directory</span>
+              <strong className="text-base text-app-accent">1,000+ indexed records</strong>
+            </div>
+            <Link to="/collection" className="ghost-button text-sm w-full mt-3 flex items-center justify-center">
               Open saved items
             </Link>
           </div>
@@ -206,9 +338,19 @@ export default function Home() {
             <h2 className="page-section-title">Featured Biomes</h2>
             <p className="mt-2 text-sm leading-7 text-app-muted">Biome records now carry their own bundled imagery and representative species shortcuts.</p>
           </div>
-          <Link to="/ecosystems" className="ghost-button text-sm">
-            Open full biome library
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBiomeOffset((o) => o + 1)}
+              className="ghost-button text-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshIcon className="h-3.5 w-3.5 text-app-accent" />
+              <span>Refresh Biomes</span>
+            </button>
+            <Link to="/ecosystems" className="ghost-button text-sm">
+              Open full biome library
+            </Link>
+          </div>
         </div>
         <div className="page-grid page-grid-3">
           {featuredEcosystems.map((ecosystem) => {
@@ -242,9 +384,19 @@ export default function Home() {
             <h2 className="page-section-title">Priority Species</h2>
             <p className="mt-2 text-sm leading-7 text-app-muted">Threatened species remain easy to surface and compare from the local index.</p>
           </div>
-          <Link to="/species?status=Endangered" className="ghost-button text-sm">
-            View endangered species
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSpeciesOffset((o) => o + 1)}
+              className="ghost-button text-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshIcon className="h-3.5 w-3.5 text-app-accent" />
+              <span>Refresh Priority</span>
+            </button>
+            <Link to="/species?status=Endangered" className="ghost-button text-sm">
+              View endangered species
+            </Link>
+          </div>
         </div>
         <div className="page-grid page-grid-3">
           {featuredSpecies.map((animal) => (

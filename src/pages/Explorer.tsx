@@ -15,12 +15,60 @@ const statuses = unique(animals.map((animal) => animal.conservationStatus));
 const classes = unique(animals.map((animal) => animal.classification.className));
 
 const routeCards = [
-  { title: "Habitats", icon: MountainIcon, blurb: "Jump by ecological setting rather than species name.", keyName: "habitat", items: habitats.slice(0, 8), accent: "lg:col-span-2" },
-  { title: "Activity", icon: BinocularsIcon, blurb: "Surface diurnal, nocturnal, and crepuscular records fast.", keyName: "activity", items: activityPatterns, accent: "" },
-  { title: "Diet", icon: LeafClusterIcon, blurb: "Split the directory into herbivores, carnivores, and omnivores.", keyName: "diet", items: diets, accent: "" },
-  { title: "Conservation", icon: GlobeGridIcon, blurb: "Focus immediately on threatened or stable species groups.", keyName: "status", items: statuses, accent: "lg:row-span-2" },
-  { title: "Classes", icon: MammalIcon, blurb: "Move by major body plan before narrowing to family or species.", keyName: "class", items: classes, accent: "" },
-  { title: "Water Systems", icon: RiverIcon, blurb: "Quick routes into wetlands, estuaries, rivers, coasts, and reefs.", keyName: "habitat", items: habitats.filter((item) => /(wetland|coast|ocean|estuary|kelp|mangrove|lake|seagrass)/i.test(item)).slice(0, 6), accent: "" },
+  { 
+    title: "Habitats", 
+    icon: MountainIcon, 
+    blurb: "Jump by ecological setting rather than species name.", 
+    keyName: "habitat", 
+    items: habitats.slice(0, 8), 
+    accent: "lg:col-span-2",
+    glowClass: "from-[#10b981]/5 hover:border-[#10b981]/25 hover:shadow-[0_0_25px_rgba(16,185,129,0.06)]"
+  },
+  { 
+    title: "Activity", 
+    icon: BinocularsIcon, 
+    blurb: "Surface diurnal, nocturnal, and crepuscular records fast.", 
+    keyName: "activity", 
+    items: activityPatterns, 
+    accent: "",
+    glowClass: "from-[#f59e0b]/5 hover:border-[#f59e0b]/25 hover:shadow-[0_0_25px_rgba(245,158,11,0.06)]"
+  },
+  { 
+    title: "Diet", 
+    icon: LeafClusterIcon, 
+    blurb: "Split the directory into herbivores, carnivores, and omnivores.", 
+    keyName: "diet", 
+    items: diets, 
+    accent: "",
+    glowClass: "from-[#14b8a6]/5 hover:border-[#14b8a6]/25 hover:shadow-[0_0_25px_rgba(20,184,166,0.06)]"
+  },
+  { 
+    title: "Conservation", 
+    icon: GlobeGridIcon, 
+    blurb: "Focus immediately on threatened or stable species groups.", 
+    keyName: "status", 
+    items: statuses, 
+    accent: "lg:row-span-2",
+    glowClass: "from-[#f43f5e]/5 hover:border-[#f43f5e]/25 hover:shadow-[0_0_25px_rgba(244,63,94,0.06)]"
+  },
+  { 
+    title: "Classes", 
+    icon: MammalIcon, 
+    blurb: "Move by major body plan before narrowing to family or species.", 
+    keyName: "class", 
+    items: classes, 
+    accent: "",
+    glowClass: "from-[#6366f1]/5 hover:border-[#6366f1]/25 hover:shadow-[0_0_25px_rgba(99,102,241,0.06)]"
+  },
+  { 
+    title: "Water Systems", 
+    icon: RiverIcon, 
+    blurb: "Quick routes into wetlands, estuaries, rivers, coasts, and reefs.", 
+    keyName: "habitat", 
+    items: habitats.filter((item) => /(wetland|coast|ocean|estuary|kelp|mangrove|lake|seagrass)/i.test(item)).slice(0, 6), 
+    accent: "",
+    glowClass: "from-[#06b6d4]/5 hover:border-[#06b6d4]/25 hover:shadow-[0_0_25px_rgba(6,182,212,0.06)]"
+  },
 ];
 
 export default function Explorer() {
@@ -45,7 +93,7 @@ export default function Explorer() {
 
   return (
     <div className="page-frame">
-      <section className="page-card overflow-hidden rounded-[1.9rem] p-6 md:p-7">
+      <section className="page-card overflow-hidden rounded-[1.9rem] p-6 md:p-7 shrink-0">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(20rem,0.98fr)]">
           <div className="flex flex-col justify-between min-w-0">
             <div>
@@ -112,10 +160,17 @@ export default function Explorer() {
           <p className="mt-2 text-sm leading-7 text-app-muted">Each tile launches the species directory with the right filter already applied.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {routeCards.map(({ title, icon: Icon, blurb, keyName, items, accent }) => (
-            <article key={title} className={`page-card interactive-card rounded-[1.6rem] p-5 ${accent}`}>
+          {routeCards.map(({ title, icon: Icon, blurb, keyName, items, accent, glowClass }) => (
+            <article
+              key={title}
+              className={[
+                "page-card interactive-card rounded-[1.6rem] p-5 relative overflow-hidden bg-gradient-to-br to-transparent border border-white/8 transition-all duration-300 group",
+                glowClass,
+                accent
+              ].join(" ")}
+            >
               <div className="flex items-center gap-3 text-app-accent">
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5 transition duration-300 group-hover:scale-110" />
                 <span className="text-xs uppercase tracking-[0.22em]">{title}</span>
               </div>
               <p className="mt-4 max-w-[40rem] text-sm leading-7 text-app-muted">{blurb}</p>
@@ -137,7 +192,7 @@ export default function Explorer() {
             <h2 className="page-section-title">Regional Atlas</h2>
             <p className="mt-2 text-sm leading-7 text-app-muted">The old atlas tools now live inside Explorer so place-based browsing stays connected to the trait grid and biome library.</p>
           </div>
-          <Link to={`/species?continent=${encodeURIComponent(selectedContinent)}`} className="ghost-button text-sm">
+          <Link to={`/species?continent=${encodeURIComponent(selectedContinent)}`} className="ghost-button text-sm cursor-pointer select-none">
             Open {selectedContinent} in directory
           </Link>
         </div>
@@ -147,7 +202,11 @@ export default function Explorer() {
             <button
               key={continent}
               type="button"
-              onClick={() => setSearchParams(new URLSearchParams({ continent }))}
+              onClick={() => setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("continent", continent);
+                return next;
+              })}
               className={[
                 "interactive-card rounded-[1.3rem] border px-4 py-4 text-left cursor-pointer",
                 continent === selectedContinent ? "border-app-accent/35 bg-app-accent/9" : "border-white/8 bg-white/[0.03]",
