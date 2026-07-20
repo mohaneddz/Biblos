@@ -1,8 +1,7 @@
-import type { AnimalClass, ConservationStatus, Continent, Diet, Habitat } from "../types/animal";
-import type { ActivityPattern } from "../types/discovery";
+import type { ActivityPattern, ConservationStatus, Continent } from "../types/animal";
 import type { SpeciesSearchHit } from "../types/speciesStore";
 
-export function inferClassFromHit(hit: Partial<SpeciesSearchHit>): AnimalClass {
+export function inferClassFromHit(hit: Partial<SpeciesSearchHit>): string {
   const className = hit.class_name?.trim();
   if (className) {
     const lower = className.toLowerCase();
@@ -70,7 +69,7 @@ export function inferClassFromHit(hit: Partial<SpeciesSearchHit>): AnimalClass {
   return "Mammalia";
 }
 
-export function inferHabitatFromHit(hit: Partial<SpeciesSearchHit>): Habitat {
+export function inferHabitatFromHit(hit: Partial<SpeciesSearchHit>): string {
   const text = `${hit.common_name || ""} ${hit.canonical_name || ""} ${hit.family || ""} ${hit.order_name || ""}`.toLowerCase();
 
   if (text.includes("coral") || text.includes("reef") || text.includes("clownfish") || text.includes("anemone")) return "Coral Reef";
@@ -96,7 +95,7 @@ export function inferHabitatFromHit(hit: Partial<SpeciesSearchHit>): Habitat {
   return "Forest";
 }
 
-export function inferDietFromHit(hit: Partial<SpeciesSearchHit>): Diet {
+export function inferDietFromHit(hit: Partial<SpeciesSearchHit>): string {
   const text = `${hit.common_name || ""} ${hit.canonical_name || ""} ${hit.family || ""} ${hit.order_name || ""}`.toLowerCase();
 
   if (text.includes("eagle") || text.includes("hawk") || text.includes("falcon") || text.includes("owl") || text.includes("shark") || text.includes("wolf") || text.includes("lion") || text.includes("tiger") || text.includes("leopard") || text.includes("jaguar") || text.includes("snake") || text.includes("viper") || text.includes("crocodile") || text.includes("alligator")) return "Carnivore";
@@ -127,9 +126,9 @@ export function inferActivityPatternFromHit(hit: Partial<SpeciesSearchHit>): Act
 export function inferContinentsFromHit(hit: Partial<SpeciesSearchHit>): Continent[] {
   const text = `${hit.common_name || ""} ${hit.canonical_name || ""} ${hit.family || ""} ${hit.order_name || ""}`.toLowerCase();
 
-  if (text.includes("whale") || text.includes("dolphin") || text.includes("shark") || text.includes("squid") || text.includes("octopus") || text.includes("tuna") || text.includes("coral") || text.includes("jellyfish")) return ["Global Oceans"];
+  if (text.includes("whale") || text.includes("dolphin") || text.includes("shark") || text.includes("squid") || text.includes("octopus") || text.includes("tuna") || text.includes("coral") || text.includes("jellyfish")) return ["Oceans"];
   if (text.includes("penguin") || text.includes("polar bear") || text.includes("walrus")) return ["Antarctica"];
-  if (text.includes("kangaroo") || text.includes("koala") || text.includes("platypus") || text.includes("kiwi") || text.includes("wombat") || text.includes("emu") || text.includes("tasmanian devil")) return ["Oceania"];
+  if (text.includes("kangaroo") || text.includes("koala") || text.includes("platypus") || text.includes("kiwi") || text.includes("wombat") || text.includes("emu") || text.includes("tasmanian devil")) return ["Australia"];
   if (text.includes("lemur") || text.includes("tenrec") || text.includes("fossa") || text.includes("lion") || text.includes("giraffe") || text.includes("zebra") || text.includes("hippo") || text.includes("gorilla") || text.includes("chimpanzee")) return ["Africa"];
   if (text.includes("panda") || text.includes("tiger") || text.includes("snow leopard") || text.includes("orangutan") || text.includes("cobra")) return ["Asia"];
   if (text.includes("jaguar") || text.includes("llama") || text.includes("sloth") || text.includes("toucan") || text.includes("anaconda") || text.includes("capybara") || text.includes("armadillo")) return ["South America"];
@@ -137,7 +136,7 @@ export function inferContinentsFromHit(hit: Partial<SpeciesSearchHit>): Continen
   if (text.includes("ibex") || text.includes("hedgehog") || text.includes("chamoise")) return ["Europe"];
 
   const animalClass = inferClassFromHit(hit);
-  if (animalClass === "Chondrichthyes" || animalClass === "Cephalopoda") return ["Global Oceans"];
+  if (animalClass === "Chondrichthyes" || animalClass === "Cephalopoda") return ["Oceans"];
 
   return ["Africa", "Asia"];
 }

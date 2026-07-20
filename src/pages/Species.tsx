@@ -152,7 +152,7 @@ export default function Species() {
         rawResults.push(animal);
       }
 
-      return rawResults;
+      return searchAnimals(rawResults, { ...filters, query: "" });
     } else {
       // Browse mode (no text query) — combine indexed database species for this page + static/cached animals
       const seenIds = new Set<string>();
@@ -189,7 +189,7 @@ export default function Species() {
         if (comLower) seenNames.add(comLower);
       }
 
-      return rawResults;
+      return searchAnimals(rawResults, { ...filters, query: "" });
     }
   }, [
     useIndexedSearch,
@@ -201,25 +201,58 @@ export default function Species() {
     inatResults,
     filterDiscoveryResults,
     allAvailableAnimals,
-    filters,
+    filters.query,
+    filters.className,
+    filters.habitat,
+    filters.diet,
+    filters.activityPattern,
+    filters.conservationStatus,
+    filters.continent,
   ]);
 
   const effectiveQuery = queryDraft.trim() || filters.query.trim();
   const typingAhead = queryDraft !== filters.query;
-  const visibleResults = results;
+
+  const totalFilteredCount = results.length;
+  const PAGE_SIZE = 36;
+  const paginatedResults = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return results.slice(start, start + PAGE_SIZE);
+  }, [results, page]);
+
+  const visibleResults = paginatedResults;
 
   const visibleFavoritesCount = useMemo(() => {
-    return visibleResults.filter((animal) => favorites.includes(animal.id)).length;
-  }, [visibleResults, favorites]);
+    return results.filter((animal) => favorites.includes(animal.id)).length;
+  }, [results, favorites]);
 
   const visibleBookmarksCount = useMemo(() => {
-    return visibleResults.filter((animal) => bookmarks.includes(animal.id)).length;
-  }, [visibleResults, bookmarks]);
+    return results.filter((animal) => bookmarks.includes(animal.id)).length;
+  }, [results, bookmarks]);
 
-  const classes = unique(allAvailableAnimals.map((animal) => animal.classification.className));
-  const habitats = unique(allAvailableAnimals.flatMap((animal) => animal.habitat));
-  const diets = unique(allAvailableAnimals.map((animal) => animal.diet));
-  const statuses = unique(allAvailableAnimals.map((animal) => animal.conservationStatus));
+  const classes = useMemo(() => unique([
+    "Mammalia", "Aves", "Reptilia", "Amphibia", "Actinopterygii", "Chondrichthyes", "Insecta", "Arachnida",
+    ...allAvailableAnimals.map((a) => a.classification.className),
+    ...indexedResults.map((a) => a.classification.className),
+  ].filter(Boolean)), [allAvailableAnimals, indexedResults]);
+
+  const habitats = useMemo(() => unique([
+    "Savannah", "Tropical Rainforest", "Ocean", "Desert", "Forest", "Wetlands", "Grassland", "Arctic & Tundra", "Mountains", "Coral Reef", "Coastal", "Freshwater",
+    ...allAvailableAnimals.flatMap((a) => a.habitat),
+    ...indexedResults.flatMap((a) => a.habitat),
+  ].filter(Boolean)), [allAvailableAnimals, indexedResults]);
+
+  const diets = useMemo(() => unique([
+    "Carnivore", "Herbivore", "Omnivore", "Insectivore", "Piscivore", "Frugivore",
+    ...allAvailableAnimals.map((a) => a.diet),
+    ...indexedResults.map((a) => a.diet),
+  ].filter(Boolean)), [allAvailableAnimals, indexedResults]);
+
+  const statuses = useMemo(() => unique([
+    "Least Concern", "Near Threatened", "Vulnerable", "Endangered", "Critically Endangered",
+    ...allAvailableAnimals.map((a) => a.conservationStatus),
+    ...indexedResults.map((a) => a.conservationStatus),
+  ].filter(Boolean)), [allAvailableAnimals, indexedResults]);
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -417,10 +450,9 @@ export default function Species() {
   useEffect(() => {
     let active = true;
     setSearchLoading(true);
-    console.info("[species-search] local search started", { query: filters.query, page });
+    console.info("[species-search] local search started", { query: filters.query });
 
-    const offset = (page - 1) * 36;
-    void searchSpeciesLocal(filters.query, 36, offset)
+    void searchSpeciesLocal(filters.query, 2000, 0)
       .then((response) => {
         if (!active) {
           return;
@@ -442,7 +474,7 @@ export default function Species() {
     return () => {
       active = false;
     };
-  }, [filters.query, page]);
+  }, [filters.query]);
 
   return (
     <div className="page-frame">
@@ -456,7 +488,11 @@ export default function Species() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="tag-chip">
-              {totalIndexedCount > 0 ? `${totalIndexedCount} indexed species` : `${visibleResults.length} matches`}
+              {hasActiveFilters
+                ? `${totalFilteredCount} matches`
+                : totalIndexedCount > 0
+                  ? `${totalIndexedCount} indexed species`
+                  : `${totalFilteredCount} matches`}
             </span>
             {visibleFavoritesCount > 0 ? <span className="tag-chip">{visibleFavoritesCount} favorites</span> : null}
             {visibleBookmarksCount > 0 ? <span className="tag-chip">{visibleBookmarksCount} bookmarks</span> : null}
@@ -618,12 +654,12 @@ export default function Species() {
           </section>
 
           {/* Pagination Bar for batch browsing */}
-          {totalIndexedCount > 36 && (
+          {totalFilteredCount > PAGE_SIZE && (
             <section className="page-card rounded-[1.5rem] p-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-app-muted">
-                Showing <span className="font-semibold text-white">{(page - 1) * 36 + 1}</span>–
-                <span className="font-semibold text-white">{Math.min(page * 36, totalIndexedCount)}</span> of{" "}
-                <span className="font-semibold text-app-accent">{totalIndexedCount}</span> indexed species
+                Showing <span className="font-semibold text-white">{(page - 1) * PAGE_SIZE + 1}</span>–
+                <span className="font-semibold text-white">{Math.min(page * PAGE_SIZE, totalFilteredCount)}</span> of{" "}
+                <span className="font-semibold text-app-accent">{totalFilteredCount}</span> indexed species
               </div>
 
               <div className="flex items-center gap-2">
@@ -637,8 +673,8 @@ export default function Species() {
                 </button>
 
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(7, Math.ceil(totalIndexedCount / 36)) }, (_, i) => {
-                    const totalPages = Math.ceil(totalIndexedCount / 36);
+                  {Array.from({ length: Math.min(7, Math.ceil(totalFilteredCount / PAGE_SIZE)) }, (_, i) => {
+                    const totalPages = Math.ceil(totalFilteredCount / PAGE_SIZE);
                     let pageNum = i + 1;
                     if (totalPages > 7) {
                       if (page > 4 && page < totalPages - 3) {
@@ -667,7 +703,7 @@ export default function Species() {
 
                 <button
                   type="button"
-                  disabled={page * 36 >= totalIndexedCount}
+                  disabled={page * PAGE_SIZE >= totalFilteredCount}
                   onClick={() => { setPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                   className="ghost-button px-3.5 py-1.5 text-xs disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                 >
