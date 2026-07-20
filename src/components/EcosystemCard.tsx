@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { getFeaturedEcosystemSpecies, type Ecosystem } from "../data/ecosystems";
 import { useWikipediaSummaries } from "../services/wikipedia";
-import { CompassIcon } from "./icons";
+import { CompassIcon, LeafClusterIcon } from "./icons";
 
 export function EcosystemCard({ ecosystem }: { ecosystem: Ecosystem }) {
   const featured = getFeaturedEcosystemSpecies(ecosystem);
@@ -18,6 +18,12 @@ export function EcosystemCard({ ecosystem }: { ecosystem: Ecosystem }) {
         {image ? <img src={image} alt={ecosystem.title} className="h-full w-full object-cover transition duration-500" /> : null}
         <div className="media-vignette" />
         
+        {/* Floating region icon badge top-left */}
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/60 px-3 py-1 text-[11px] font-semibold text-app-accent backdrop-blur-md shadow-lg">
+          <LeafClusterIcon className="h-3.5 w-3.5" />
+          <span>{ecosystem.region}</span>
+        </div>
+
         {/* Floating explorer button top-right */}
         <div className="absolute right-3 top-3 z-10">
           <Link
