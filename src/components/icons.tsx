@@ -602,3 +602,22 @@ export function CopyIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function FolderIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    </IconBase>
+  );
+}
+
+export function FolderPlusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 10v6" />
+      <path d="M9 13h6" />
+      <path d="M20 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H20a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2Z" />
+    </IconBase>
+  );
+}
+
