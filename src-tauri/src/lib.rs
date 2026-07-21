@@ -1,9 +1,11 @@
 mod species_store;
 
-use species_store::{InatAutocompleteResponse, SearchResponse, SpeciesProfilePayload, StructuredFilters};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
+use species_store::{
+    InatAutocompleteResponse, SearchResponse, SpeciesProfilePayload, StructuredFilters,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 struct AiNaturalistMessage {
@@ -47,7 +49,8 @@ async fn search_species_local(
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<SearchResponse, String> {
-    species_store::search_index(Some(&app), &query, limit.unwrap_or(36), offset.unwrap_or(0)).map_err(|error| error.to_string())
+    species_store::search_index(Some(&app), &query, limit.unwrap_or(36), offset.unwrap_or(0))
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -84,7 +87,10 @@ async fn hydrate_species_profile(
 }
 
 #[tauri::command]
-async fn get_cached_species_profiles(app: tauri::AppHandle, ids: Vec<String>) -> Result<Vec<serde_json::Value>, String> {
+async fn get_cached_species_profiles(
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+) -> Result<Vec<serde_json::Value>, String> {
     species_store::list_profiles_by_ids(Some(&app), &ids).map_err(|error| error.to_string())
 }
 
@@ -136,7 +142,14 @@ async fn ask_ai_naturalist(
         }));
     }
 
-    for entry in history.into_iter().rev().take(6).collect::<Vec<_>>().into_iter().rev() {
+    for entry in history
+        .into_iter()
+        .rev()
+        .take(6)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+    {
         messages.push(json!({
             "role": entry.role,
             "content": entry.content,
@@ -165,8 +178,14 @@ async fn ask_ai_naturalist(
 
     if !response.status().is_success() {
         let status = response.status();
-        let err_body = response.text().await.unwrap_or_else(|_| "Unknown error body".to_string());
-        return Err(format!("Groq request failed with status {}: {}", status, err_body));
+        let err_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error body".to_string());
+        return Err(format!(
+            "Groq request failed with status {}: {}",
+            status, err_body
+        ));
     }
 
     let payload: GroqChatResponse = response.json().await.map_err(|error| error.to_string())?;
@@ -185,7 +204,11 @@ async fn fetch_image_base64(url: String) -> Result<String, String> {
         .build()
         .map_err(|error| error.to_string())?;
 
-    let resp = client.get(&url).send().await.map_err(|error| error.to_string())?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
 
     let content_type = resp
         .headers()
@@ -217,7 +240,7 @@ pub fn run() {
             search_inat_autocomplete,
             parse_query_to_filters,
             ask_ai_naturalist,
-            fetch_image_base64
+            fetch_image_base64,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
