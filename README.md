@@ -1,122 +1,96 @@
-# ⚙️Tauri PlayToys 
+<h1 style="font-family: Arial, sans-serif; font-size: 36px; color: #4F46E5; display: flex; align-items: center; gap: 12px; border-bottom: 3px solid #4F46E5; padding-bottom: 8px;">
+  Biblos — Interactive Biodiversity Explorer
+</h1>
 
-This repository is a collection of experimental tools and utilities built using the [Tauri](https://tauri.app/) framework, [Rust](https://www.rust-lang.org/), and Typescript. These tools leverage Rust's low-level access to operating system features and expose them through a modern JavaScript API, enabling lightweight, secure, and cross-platform desktop applications. It serves as a playground for exploring the capabilities of Tauri and Rust plugins.
+Biblos is a Tauri desktop application for exploring species, ecosystems, taxonomy, and natural-history media. It combines curated local data with optional live species services and interactive visual tools.
 
-## Table of Contents
+---
 
-- [Overview](#overview)
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the App](#running-the-app)
-- [Project Structure](#project-structure)
-- [Development](#development)
-  - [Scripts](#scripts)
-  - [Building for Production](#building-for-production)
-- [Recommended IDE Setup](#recommended-ide-setup)
-- [Contributing](#contributing)
-- [License](#license)
+## Tech Used
 
-## Overview
+![Tauri](https://img.shields.io/badge/Tauri-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-000000?style=for-the-badge&logo=threedotjs&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 
-This project is a boilerplate for building cross-platform desktop applications using the [Tauri](https://tauri.app/) framework, [React](https://reactjs.org/), and [TypeScript](https://www.typescriptlang.org/). It leverages [Vite](https://vitejs.dev/) for fast builds and hot module replacement.
+---
 
 ## Features
 
-- **Cross-Platform**: Build apps for Windows, macOS, and Linux.
-- **Lightweight**: Tauri apps are smaller and faster than traditional Electron apps.
-- **Modern Frontend**: Powered by React and TypeScript.
-- **Fast Development**: Vite ensures quick builds and live reloading.
-- **Secure**: Tauri provides a secure environment for your app.
+- Explore curated species, ecosystems, and the tree of life
+- Species search, detailed profiles, classification tree, and comparison view
+- Personal collections and folders
+- Optional live data and media services, including GBIF, iNaturalist, Wikipedia, and YouTube
+- AI Naturalist workspace and natural-language species tooling
+- 3D species viewer powered by React Three Fiber and Drei
+- Image drop area and local background-removal capability
+- Rust index-seeding command for local data setup
+
+---
+
+## Screenshots
+
+<img src="screenshots/home.png" alt="Biblos species explorer home screen" width="88%"/>
+
+**Home:** Search the life directory, jump into the explorer, and browse a daily animal, animal fact, and recently viewed species.
+
+---
+
+## Project Structure
+
+```text
+src/
+|-- assets/                 # Brand graphics
+|-- components/             # Search, species, taxonomy, collection, and modal UI
+|-- data/                   # Curated animals, discovery, ecosystems, tree-of-life data
+|-- pages/                  # Explorer, species, ecosystems, compare, collection, settings
+|-- services/               # Live data, media, cache, AI, and search services
+|-- hooks/                  # Species-media hooks
+|-- App.tsx                 # Main application and routes
+`-- main.tsx                # React entry point
+
+src-tauri/
+|-- src/                    # Tauri backend and seed binary
+|-- tauri.conf.json         # Desktop window and bundle configuration
+`-- Cargo.toml              # Rust dependencies
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-Ensure you have the following installed:
+- Node.js 18+
+- npm
+- Rust toolchain
+- Tauri system dependencies for your operating system
 
-- [Node.js](https://nodejs.org/) (version 16 or higher)
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites/)
-
-### Installation
-
-Clone the repository and install dependencies:
+### Install and run
 
 ```bash
-git clone https://github.com/your-repo/tauri-playtoys.git
-cd tauri-playtoys
 npm install
+npm run tauri dev
 ```
 
-### Running the App
-
-Start the development server:
+For frontend-only development:
 
 ```bash
 npm run dev
 ```
 
-This will launch the app in development mode with hot module replacement.
+The Vite server is configured for `http://localhost:8668`.
 
-## Project Structure
+---
 
-```plaintext
-.
-├── public/                 # Static assets
-├── src/                    # React source code
-│   ├── assets/             # Images, fonts, etc.
-│   ├── components/         # Reusable React components
-│   ├── pages/              # Page components
-│   ├── App.tsx             # Main React component
-│   ├── main.tsx            # React entry point
-├── src-tauri/              # Tauri configuration and Rust backend
-│   ├── src/                # Rust source code
-│   ├── tauri.conf.json     # Tauri configuration
-├── package.json            # Node.js dependencies and scripts
-├── tsconfig.json           # TypeScript configuration
-├── vite.config.ts          # Vite configuration
-└── README.md               # Project documentation
-```
-
-## Development
-
-### Scripts
-
-- **`npm run dev`**: Start the development server.
-- **`npm run build`**: Build the app for production.
-- **`npm run preview`**: Preview the production build.
-- **`npm run tauri`**: Run Tauri commands.
-
-### Building for Production
-
-To create a production build of your app:
+## Available Scripts
 
 ```bash
-npm run build
+npm run dev          # Start Vite
+npm run build        # Type-check and build frontend assets
+npm run preview      # Preview the production frontend build
+npm run tauri dev    # Run the desktop app
+npm run seed:index   # Run the Biblos Rust index seeder
 ```
-
-The output will be in the `dist` directory.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/)
-  - [Tauri Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
-  - [Rust Analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-  - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
-  - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch: `git checkout -b feature-name`.
-3. Commit your changes: `git commit -m "Add feature"`.
-4. Push to the branch: `git push origin feature-name`.
-5. Submit a pull request.
-
-## License
-
-This project is licensed under the [MIT License with Attribution](LICENSE).
