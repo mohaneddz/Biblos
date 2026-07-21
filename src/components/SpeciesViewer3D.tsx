@@ -219,85 +219,22 @@ function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLC
     const h = out.height;
     const cx = w / 2;
     const cy = h / 2;
-    const maxCenterDist = Math.sqrt(cx * cx + cy * cy);
-
-    const bgSamples: Array<[number, number, number]> = [];
-    const stepX = Math.max(1, Math.floor(w / 32));
-    const stepY = Math.max(1, Math.floor(h / 32));
-
-    for (let x = 0; x < w; x += stepX) {
-      const iTop = (0 * w + x) * 4;
-      const iBot = ((h - 1) * w + x) * 4;
-      bgSamples.push([px[iTop], px[iTop + 1], px[iTop + 2]]);
-      bgSamples.push([px[iBot], px[iBot + 1], px[iBot + 2]]);
-    }
-    for (let y = 0; y < h; y += stepY) {
-      const iLeft = (y * w + 0) * 4;
-      const iRight = (y * w + (w - 1)) * 4;
-      bgSamples.push([px[iLeft], px[iLeft + 1], px[iLeft + 2]]);
-      bgSamples.push([px[iRight], px[iRight + 1], px[iRight + 2]]);
-    }
-
-    let avgR = 0, avgG = 0, avgB = 0;
-    for (const [r, g, b] of bgSamples) {
-      avgR += r; avgG += g; avgB += b;
-    }
-    avgR /= bgSamples.length;
-    avgG /= bgSamples.length;
-    avgB /= bgSamples.length;
 
     for (let i = 0; i < px.length; i += 4) {
       const x = (i / 4) % w;
       const y = Math.floor((i / 4) / w);
-      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
-      if (a < 10) continue;
+      const alpha = px[i + 3];
+      if (alpha < 10) continue;
 
-      let minDist = 9999;
-      for (const [br, bg, bb] of bgSamples) {
-        const d = Math.sqrt((r - br) ** 2 + (g - bg) ** 2 + (b - bb) ** 2);
-        if (d < minDist) minDist = d;
-      }
-
-      const avgDist = Math.sqrt((r - avgR) ** 2 + (g - avgG) ** 2 + (b - avgB) ** 2);
-      const effectiveBgDist = Math.min(minDist, avgDist);
-      const centerDistNorm = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxCenterDist;
-      const bgMatchThreshold = 45 + (1 - centerDistNorm) * 25;
-
-      if (effectiveBgDist < bgMatchThreshold) {
-        const matchFactor = 1 - (effectiveBgDist / bgMatchThreshold);
-        const edgeWeight = Math.pow(centerDistNorm, 1.5);
-        const alphaFactor = Math.max(0, 1 - matchFactor * (0.4 + 0.6 * edgeWeight));
-
-        if (alphaFactor < 0.15) {
-          px[i + 3] = 0;
-        } else {
-          px[i + 3] = Math.round(a * alphaFactor);
-        }
+      const normDist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / Math.sqrt(cx * cx + cy * cy);
+      if (normDist > 0.48) {
+        const edgeFade = Math.max(0, 1 - (normDist - 0.48) / 0.12);
+        px[i + 3] = Math.round(alpha * edgeFade);
       }
     }
-
     ctx.putImageData(imgData, 0, 0);
-
-    const d = ctx.getImageData(0, 0, w, h);
-    const p = d.data;
-    const innerR = Math.min(w, h) * 0.36;
-    const outerR = Math.max(w, h) * 0.58;
-
-    for (let i = 0; i < p.length; i += 4) {
-      const x = (i / 4) % w;
-      const y = Math.floor((i / 4) / w);
-      const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-      if (dist > innerR) {
-        let t = Math.min(1, (dist - innerR) / (outerR - innerR));
-        t = t * t * (3 - 2 * t);
-        if (p[i + 3] < 220) {
-          p[i + 3] = Math.round(p[i + 3] * (1 - t));
-        }
-      }
-    }
-    ctx.putImageData(d, 0, 0);
   } catch (e) {
-    console.warn("[3D Viewer] Smart fallback extraction error:", e);
+    console.warn("[3D Viewer] Subject extraction fallback error:", e);
   }
 
   return out;
@@ -442,17 +379,24 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
         const { removeBackground } = await import("@imgly/background-removal");
         setProgress({ label: "Loading AI background removal…", percent: 22 });
 
-        const resultBlob = await removeBackground(rawBlob, {
-          publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.7.0/dist/",
-          model: "isnet_quint8",
-          output: { format: "image/png", quality: 0.95 },
-          progress: (_key: string, current: number, total: number) => {
-            if (total > 0) {
-              const pct = Math.min(45, 22 + Math.round((current / total) * 23));
-              setProgress({ label: "Isolating species cutout with AI…", percent: pct });
-            }
-          },
-        });
+        let resultBlob: Blob;
+        const imglyConfig = {
+          publicPath: "https://static.imgly.com/@imgly/background-removal-data/1.7.0/dist/",
+          output: { format: "image/png" as const, quality: 0.95 },
+        };
+        try {
+          resultBlob = await removeBackground(rawBlob, {
+            ...imglyConfig,
+            progress: (_key: string, current: number, total: number) => {
+              if (total > 0) {
+                const pct = Math.min(45, 22 + Math.round((current / total) * 23));
+                setProgress({ label: "Isolating species cutout with AI…", percent: pct });
+              }
+            },
+          });
+        } catch {
+          resultBlob = await removeBackground(sourceCanvas.toDataURL("image/png"), imglyConfig);
+        }
 
         const segBlobUrl = URL.createObjectURL(resultBlob);
         const segImg = await new Promise<HTMLImageElement>((res, rej) => {
@@ -521,10 +465,8 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       const group = new THREE.Group();
       scene.add(group);
 
-      // Subject 2D plane texture & shader
       const subjectTexture = new THREE.CanvasTexture(activeCanvas);
       subjectTexture.colorSpace = THREE.SRGBColorSpace;
-
       const depthTexture = new THREE.CanvasTexture(depthCanvas);
 
       const aspect = activeCanvas.width / activeCanvas.height;
@@ -599,7 +541,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
 
       let triposrMesh: THREE.Mesh | undefined;
 
-      /* ── Step 4: TripoSR 3D Mesh Generation (if targetMode === "triposr") ── */
+      /* ── Step 4: TripoSR 3D Mesh Generation ─────────────────────────── */
       if (targetMode === "triposr") {
         try {
           const meshData: MeshData = await generateTripoSRMesh(
@@ -616,8 +558,10 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
           triposrGeo.center();
           triposrGeo.computeBoundingSphere();
           const radius = triposrGeo.boundingSphere?.radius || 1.0;
-          const targetScale = 1.6 / radius;
-          triposrGeo.scale(targetScale, targetScale, targetScale);
+          if (!isNaN(radius) && radius > 1e-4) {
+            const targetScale = 1.6 / radius;
+            triposrGeo.scale(targetScale, targetScale, targetScale);
+          }
 
           const triposrMat = new THREE.MeshStandardMaterial({
             vertexColors: true,
@@ -635,9 +579,11 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
           materials.push(triposrMat);
           geometries.push(triposrGeo);
         } catch (tErr) {
-          console.warn("[3D Viewer] TripoSR 3D Mesh generation failed, falling back to 3D cutout mode:", tErr);
-          cardMesh.visible = true;
-          setViewMode("cutout");
+          console.error("[3D Viewer] TripoSR 3D Mesh generation failed:", tErr);
+          const msg = tErr instanceof Error ? tErr.message : String(tErr);
+          setErrorMsg(`TripoSR 3D Mesh Error: ${msg}`);
+          setStatus("error");
+          return;
         }
       }
 

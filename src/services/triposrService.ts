@@ -19,7 +19,7 @@ let encoderSession: ort.InferenceSession | null = null;
 let decoderSession: ort.InferenceSession | null = null;
 
 /**
- * Downloads model weight file with local Cache API fallback and progress updates.
+ * Downloads model weight file with local Cache API persistent storage and safe progress updates.
  */
 async function fetchModelWithCache(
   url: string,
@@ -62,9 +62,7 @@ async function fetchModelWithCache(
     if (value) {
       chunks.push(value);
       loaded += value.byteLength;
-      if (total > 0) {
-        onProgress?.(loaded, total);
-      }
+      onProgress?.(loaded, total > 0 ? total : 0);
     }
   }
 
@@ -75,7 +73,6 @@ async function fetchModelWithCache(
     offset += chunk.byteLength;
   }
 
-  // Save to Cache API for instant offline access next time
   if (typeof window !== "undefined" && "caches" in window) {
     try {
       const cache = await caches.open(CACHE_NAME);
@@ -93,7 +90,8 @@ async function fetchModelWithCache(
 }
 
 /**
- * Initializes the ONNX Runtime sessions for Encoder & Decoder.
+ * Initializes the ONNX Runtime sessions for Encoder & Decoder with WASM single-threaded backend.
+ * numThreads=1 avoids the need for threaded .mjs worker files which Vite cannot import from /public.
  */
 export async function initTripoSRSessions(
   onProgress?: (progress: TripoSRProgress) => void
@@ -102,32 +100,58 @@ export async function initTripoSRSessions(
     return { encoder: encoderSession, decoder: decoderSession };
   }
 
-  // Configure ORT options
-  ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const assetsUrl = origin ? `${origin}/assets/` : "/assets/";
+
+  // Force single-threaded WASM execution and explicitly map all WASM / JS glue binaries
+  // to avoid colliding with other libraries or missing .mjs workers.
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
+  ort.env.wasm.wasmPaths = assetsUrl;
 
   onProgress?.({ label: "Downloading TripoSR Encoder (~430MB INT8 model)…", percent: 5 });
 
   const encoderBuffer = await fetchModelWithCache(ENCODER_MODEL_URL, (loaded, total) => {
-    const pct = total > 0 ? Math.round((loaded / total) * 45) : 20;
-    onProgress?.({ label: `Downloading TripoSR Encoder… (${Math.round(loaded / 1024 / 1024)}MB)`, percent: 5 + pct });
+    const pct = total > 0 ? Math.min(45, Math.round((loaded / total) * 45)) : Math.min(45, Math.round((loaded / (430 * 1024 * 1024)) * 45));
+    onProgress?.({ label: `Downloading TripoSR Encoder… (${(loaded / 1024 / 1024).toFixed(1)}MB)`, percent: 5 + pct });
   });
 
   onProgress?.({ label: "Downloading TripoSR Decoder (~15MB model)…", percent: 52 });
 
   const decoderBuffer = await fetchModelWithCache(DECODER_MODEL_URL, (loaded, total) => {
-    const pct = total > 0 ? Math.round((loaded / total) * 15) : 5;
-    onProgress?.({ label: "Downloading TripoSR Decoder…", percent: 52 + pct });
+    const pct = total > 0 ? Math.min(15, Math.round((loaded / total) * 15)) : Math.min(15, Math.round((loaded / (15 * 1024 * 1024)) * 15));
+    onProgress?.({ label: `Downloading TripoSR Decoder… (${(loaded / 1024 / 1024).toFixed(1)}MB)`, percent: 52 + pct });
   });
 
-  onProgress?.({ label: "Initializing WebGL / WebGPU AI Engine…", percent: 70 });
+  onProgress?.({ label: "Initializing WebAssembly AI Engine…", percent: 70 });
+
+  // Re-assert single-threading immediately before session initialization
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
 
   const options: ort.InferenceSession.SessionOptions = {
-    executionProviders: ["webgpu", "webgl", "wasm"],
-    graphOptimizationLevel: "all",
+    executionProviders: ["wasm"],
   };
 
-  encoderSession = await ort.InferenceSession.create(encoderBuffer, options);
-  decoderSession = await ort.InferenceSession.create(decoderBuffer, options);
+  const encoderData = new Uint8Array(encoderBuffer);
+  const decoderData = new Uint8Array(decoderBuffer);
+
+  try {
+    encoderSession = await ort.InferenceSession.create(encoderData, options);
+  } catch (err) {
+    console.warn("[TripoSR] Encoder session creation retry:", err);
+    encoderSession = await ort.InferenceSession.create(encoderData);
+  }
+
+  try {
+    decoderSession = await ort.InferenceSession.create(decoderData, options);
+  } catch (err) {
+    console.warn("[TripoSR] Decoder session creation retry:", err);
+    decoderSession = await ort.InferenceSession.create(decoderData);
+  }
+
+  console.log("[TripoSR] Sessions ready. Encoder inputs:", encoderSession.inputNames, "outputs:", encoderSession.outputNames);
+  console.log("[TripoSR] Decoder inputs:", decoderSession.inputNames, "outputs:", decoderSession.outputNames);
 
   onProgress?.({ label: "TripoSR AI Engine Ready", percent: 75 });
   return { encoder: encoderSession, decoder: decoderSession };
@@ -143,11 +167,9 @@ function preprocessImage(srcCanvas: HTMLCanvasElement): Float32Array {
   canvas.height = SIZE;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-  // Fill with neutral background for transparent PNG cutouts
   ctx.fillStyle = "#808080";
   ctx.fillRect(0, 0, SIZE, SIZE);
 
-  // Draw scaled image centered
   const scale = Math.min(SIZE / srcCanvas.width, SIZE / srcCanvas.height);
   const w = srcCanvas.width * scale;
   const h = srcCanvas.height * scale;
@@ -158,14 +180,12 @@ function preprocessImage(srcCanvas: HTMLCanvasElement): Float32Array {
   const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
   const px = imgData.data;
 
-  // Output shape: 1 * 3 * 512 * 512
   const tensorData = new Float32Array(3 * SIZE * SIZE);
 
-  // Normalization: (px / 255.0 - 0.5) / 0.5 = px / 127.5 - 1.0
   for (let i = 0; i < SIZE * SIZE; i++) {
-    const r = px[i * 4] / 127.5 - 1.0;
-    const g = px[i * 4 + 1] / 127.5 - 1.0;
-    const b = px[i * 4 + 2] / 127.5 - 1.0;
+    const r = px[i * 4] / 255.0;
+    const g = px[i * 4 + 1] / 255.0;
+    const b = px[i * 4 + 2] / 255.0;
 
     tensorData[i] = r;
     tensorData[SIZE * SIZE + i] = g;
@@ -176,7 +196,7 @@ function preprocessImage(srcCanvas: HTMLCanvasElement): Float32Array {
 }
 
 /**
- * Generates a full 3D animal mesh from an image using TripoSR.
+ * Generates a full 3D mesh model from an image using TripoSR.
  */
 export async function generateTripoSRMesh(
   inputCanvas: HTMLCanvasElement,
@@ -191,14 +211,12 @@ export async function generateTripoSRMesh(
 
   onProgress?.({ label: "Extracting 3D Triplane Features…", percent: 82 });
 
-  // Encoder inference
   const encoderInputName = encoder.inputNames[0] || "image";
   const encoderResults = await encoder.run({ [encoderInputName]: imageTensor });
   const triplaneTensor = encoderResults[encoder.outputNames[0]];
 
   onProgress?.({ label: "Sampling 3D NeRF Grid…", percent: 87 });
 
-  // Create 3D grid points in range [-1.0, 1.0]
   const numPoints = gridDim * gridDim * gridDim;
   const gridCoords = new Float32Array(numPoints * 3);
 
@@ -218,13 +236,12 @@ export async function generateTripoSRMesh(
     }
   }
 
-  // Batch decoder evaluations to avoid OOM
   const BATCH_SIZE = 16384;
   const densities = new Float32Array(numPoints);
   const colors = new Float32Array(numPoints * 3);
 
-  const decoderInput1 = decoder.inputNames[0] || "triplane";
-  const decoderInput2 = decoder.inputNames[1] || "coords";
+  const decoderInput1 = decoder.inputNames[0] || "scene_codes";
+  const decoderInput2 = decoder.inputNames[1] || "positions";
 
   for (let offset = 0; offset < numPoints; offset += BATCH_SIZE) {
     const currentBatchSize = Math.min(BATCH_SIZE, numPoints - offset);
@@ -237,7 +254,7 @@ export async function generateTripoSRMesh(
     });
 
     const outDensityKey = decoder.outputNames.find((n) => n.includes("density") || n.includes("sigma")) || decoder.outputNames[0];
-    const outColorKey = decoder.outputNames.find((n) => n.includes("rgb") || n.includes("color")) || decoder.outputNames[1] || decoder.outputNames[0];
+    const outColorKey = decoder.outputNames.find((n) => n.includes("rgb") || n.includes("color") || n.includes("features")) || decoder.outputNames[1] || decoder.outputNames[0];
 
     const densityOut = decoderFeats[outDensityKey].data as Float32Array;
     const colorOut = decoderFeats[outColorKey]?.data as Float32Array;
@@ -246,15 +263,13 @@ export async function generateTripoSRMesh(
       densities[offset + i] = densityOut[i];
 
       if (colorOut && colorOut.length >= currentBatchSize * 3) {
-        // Colors normalized to [0..1]
         colors[(offset + i) * 3 + 0] = Math.max(0, Math.min(1, colorOut[i * 3 + 0]));
         colors[(offset + i) * 3 + 1] = Math.max(0, Math.min(1, colorOut[i * 3 + 1]));
         colors[(offset + i) * 3 + 2] = Math.max(0, Math.min(1, colorOut[i * 3 + 2]));
       } else {
-        // Fallback default color
-        colors[(offset + i) * 3 + 0] = 0.85;
+        colors[(offset + i) * 3 + 0] = 0.80;
         colors[(offset + i) * 3 + 1] = 0.75;
-        colors[(offset + i) * 3 + 2] = 0.60;
+        colors[(offset + i) * 3 + 2] = 0.65;
       }
     }
 
@@ -262,11 +277,39 @@ export async function generateTripoSRMesh(
     onProgress?.({ label: `Evaluating 3D NeRF Density (${Math.round((offset / numPoints) * 100)}%)…`, percent: 87 + pct });
   }
 
+  let minD = Infinity, maxD = -Infinity, sumD = 0;
+  for (let i = 0; i < numPoints; i++) {
+    const v = densities[i];
+    if (v < minD) minD = v;
+    if (v > maxD) maxD = v;
+    sumD += v;
+  }
+  const avgD = sumD / numPoints;
+  console.log(`[TripoSR] Density statistics -> Min: ${minD.toFixed(4)}, Max: ${maxD.toFixed(4)}, Avg: ${avgD.toFixed(4)}`);
+
+  if (maxD <= minD + 1e-4) {
+    throw new Error("TripoSR model returned uniform density across the 3D grid.");
+  }
+
   onProgress?.({ label: "Extracting 3D Mesh Isosurface (Marching Cubes)…", percent: 96 });
 
-  // Extract mesh with Marching Cubes algorithm
-  const meshData = generateMeshFromGrid(gridDim, densities, colors, 0.0, [-1.0, 1.0]);
+  let bestMesh: MeshData | null = null;
+  const thresholdFactors = [0.35, 0.25, 0.18, 0.12, 0.05, 0.01];
 
-  onProgress?.({ label: "TripoSR Mesh Ready!", percent: 100 });
-  return meshData;
+  for (const factor of thresholdFactors) {
+    const isovalue = minD + (maxD - minD) * factor;
+    const mesh = generateMeshFromGrid(gridDim, densities, colors, isovalue, [-1.0, 1.0]);
+    if (mesh.positions.length > 30) {
+      console.log(`[TripoSR] Generated 3D Mesh at isovalue ${isovalue.toFixed(4)} (${mesh.positions.length / 9} triangles)`);
+      bestMesh = mesh;
+      break;
+    }
+  }
+
+  if (!bestMesh || bestMesh.positions.length === 0) {
+    throw new Error("Failed to extract surface triangles from NeRF density field.");
+  }
+
+  onProgress?.({ label: "TripoSR 3D Model Ready!", percent: 100 });
+  return bestMesh;
 }

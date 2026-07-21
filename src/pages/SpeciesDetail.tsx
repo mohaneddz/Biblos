@@ -8,7 +8,7 @@ import { useSpeciesMedia } from "../hooks/useSpeciesMedia";
 import { clearAnimalMediaCache } from "../services/speciesMedia";
 import { animalMap } from "../data/animals";
 import { findMatchingEcosystem } from "../data/ecosystems";
-import { getFavorites, getBookmarkedSpecies, getCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite, deleteSpeciesRecordOnly } from "../services/cache";
+import { getFavorites, getBookmarkedSpecies, getCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite, deleteSpeciesRecordOnly, getSectionStates, saveSectionStates } from "../services/cache";
 import { hydrateSpeciesProfile, hydrateSpeciesWithAI } from "../services/speciesStore";
 import { searchSpeciesVideos } from "../services/youtubeService";
 import type { Animal, SpeciesVideo } from "../types/animal";
@@ -154,8 +154,35 @@ export default function SpeciesDetail() {
   const [favorites, setFavorites] = useState(() => getFavorites());
   const [bookmarks, setBookmarks] = useState(() => getBookmarkedSpecies());
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-  const [show3DSection, setShow3DSection] = useState(false);
-  const [showVideosSection, setShowVideosSection] = useState(false);
+  const initialSections = getSectionStates();
+  const [showGallerySection, setShowGallerySection] = useState(() => initialSections.gallery);
+  const [show3DSection, setShow3DSection] = useState(() => initialSections.model3d);
+  const [showVideosSection, setShowVideosSection] = useState(() => initialSections.videos);
+
+  const toggleGallerySection = () => {
+    setShowGallerySection((prev) => {
+      const next = !prev;
+      saveSectionStates({ gallery: next });
+      return next;
+    });
+  };
+
+  const toggleVideosSection = () => {
+    setShowVideosSection((prev) => {
+      const next = !prev;
+      saveSectionStates({ videos: next });
+      return next;
+    });
+  };
+
+  const toggle3DSection = () => {
+    setShow3DSection((prev) => {
+      const next = !prev;
+      saveSectionStates({ model3d: next });
+      return next;
+    });
+  };
+
   const [refreshingSection, setRefreshingSection] = useState<string | null>(null);
   const [, setMediaVersion] = useState(0);
   const { gallery, primaryImage } = useSpeciesMedia(animal, "full");
@@ -538,55 +565,85 @@ export default function SpeciesDetail() {
         </div>
       </section>
 
+      {/* Reference Gallery Section — collapsible */}
       <section className="page-card rounded-[1.5rem] p-5">
-        <div className="flex items-center justify-between border-b border-white/8 pb-3 mb-4">
-          <h2 className="page-section-title flex items-center gap-2 mb-0">
-            <ImageIcon className="h-5 w-5 text-app-accent" />
-            <span>Reference Gallery</span>
-          </h2>
-          <button
-            type="button"
-            onClick={() => handleRefreshSection("gallery")}
-            disabled={refreshingSection === "gallery"}
-            title="Re-search open-license reference media"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "gallery" ? "animate-spin text-app-accent" : ""}`} />
-            <span>Refresh Gallery</span>
-          </button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {gallery.length > 0
-            ? gallery.map((asset, index) => (
-              <a
-                key={`${asset.source}-${index}`}
-                href={asset.sourceUrl ?? asset.url}
-                target="_blank"
-                rel="noreferrer"
-                className="interactive-card group overflow-hidden rounded-[1.25rem] border border-white/8 bg-black/15 flex flex-col h-[15rem]"
+        <button
+          type="button"
+          onClick={toggleGallerySection}
+          className="flex w-full items-center justify-between gap-3 cursor-pointer group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/30 bg-app-accent/10">
+              <ImageIcon className="h-4.5 w-4.5 text-app-accent" />
+            </div>
+            <div className="text-left">
+              <span className="text-sm font-semibold text-white group-hover:text-app-accent transition">
+                Reference Gallery
+              </span>
+              <p className="text-xs text-app-muted mt-0.5">
+                {showGallerySection
+                  ? "High quality reference photos and open biodiversity media"
+                  : "Click to expand and view reference photos for this species"}
+              </p>
+            </div>
+          </div>
+          <div className={`flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-app-soft transition-transform duration-300 ${
+            showGallerySection ? "rotate-180" : ""
+          }`}>
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {showGallerySection && (
+          <div className="mt-5 border-t border-white/8 pt-5">
+            <div className="flex justify-end mb-4">
+              <button
+                type="button"
+                onClick={() => handleRefreshSection("gallery")}
+                disabled={refreshingSection === "gallery"}
+                title="Re-search open-license reference media"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
               >
-                <img src={asset.thumbnailUrl ?? asset.url} alt={asset.alt} className="h-[10.5rem] w-full object-cover transition duration-300" />
-                <div className="grid gap-1 p-3 flex-1 flex flex-col justify-between min-h-0">
-                  <span className="text-xs uppercase tracking-[0.18em] text-app-accent">{asset.source}</span>
-                  <span className="text-sm text-app-muted truncate" title={asset.attribution ?? "Open biodiversity media"}>
-                    {asset.attribution ?? "Open biodiversity media"}
-                  </span>
-                </div>
-              </a>
-            ))
-            : [1, 2, 3, 4, 5, 6].map((entry) => (
-              <div key={entry} className="placeholder-media flex items-end rounded-[1.25rem] p-4 h-[15rem]">
-                <span className="text-sm text-app-text">Media will resolve when open-license sources are available for this record.</span>
-              </div>
-            ))}
-        </div>
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "gallery" ? "animate-spin text-app-accent" : ""}`} />
+                <span>Refresh Gallery</span>
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {gallery.length > 0
+                ? gallery.map((asset, index) => (
+                  <a
+                    key={`${asset.source}-${index}`}
+                    href={asset.sourceUrl ?? asset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="interactive-card group overflow-hidden rounded-[1.25rem] border border-white/8 bg-black/15 flex flex-col h-[15rem]"
+                  >
+                    <img src={asset.thumbnailUrl ?? asset.url} alt={asset.alt} className="h-[10.5rem] w-full object-cover transition duration-300" />
+                    <div className="grid gap-1 p-3 flex-1 flex flex-col justify-between min-h-0">
+                      <span className="text-xs uppercase tracking-[0.18em] text-app-accent">{asset.source}</span>
+                      <span className="text-sm text-app-muted truncate" title={asset.attribution ?? "Open biodiversity media"}>
+                        {asset.attribution ?? "Open biodiversity media"}
+                      </span>
+                    </div>
+                  </a>
+                ))
+                : [1, 2, 3, 4, 5, 6].map((entry) => (
+                  <div key={entry} className="placeholder-media flex items-end rounded-[1.25rem] p-4 h-[15rem]">
+                    <span className="text-sm text-app-text">Media will resolve when open-license sources are available for this record.</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Natural History Videos Section */}
       <section className="page-card rounded-[1.5rem] p-5">
         <button
           type="button"
-          onClick={() => setShowVideosSection((v) => !v)}
+          onClick={toggleVideosSection}
           className="flex w-full items-center justify-between gap-3 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
@@ -757,7 +814,7 @@ export default function SpeciesDetail() {
         <section className="page-card rounded-[1.5rem] p-5">
           <button
             type="button"
-            onClick={() => setShow3DSection((v) => !v)}
+            onClick={toggle3DSection}
             className="flex w-full items-center justify-between gap-3 cursor-pointer group"
           >
             <div className="flex items-center gap-3">
