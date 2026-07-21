@@ -11,14 +11,17 @@ import {
   Layers,
   Image as ImageIcon,
   Sliders,
+  Box,
+  Sparkles,
 } from "lucide-react";
+import { generateTripoSRMesh, MeshData } from "../services/triposrService";
 
 interface SpeciesViewer3DProps {
   imageUrl: string;
   name: string;
 }
 
-type ViewMode = "card" | "cutout";
+type ViewMode = "triposr" | "cutout" | "card";
 type ViewerStatus = "idle" | "loading" | "ready" | "error";
 
 interface StepProgress {
@@ -30,10 +33,6 @@ interface StepProgress {
  * GLSL Shaders — clean parallax depth card
  *────────────────────────────────────────────────────────────────────────────*/
 
-/**
- * Vertex shader: reads depth map and displaces vertices along their normals.
- * Depth map is generated from luminance + radial centre weighting.
- */
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -54,9 +53,6 @@ const VERTEX_SHADER = /* glsl */ `
   }
 `;
 
-/**
- * Fragment shader: colour texture with alpha discard and rim glow.
- */
 const FRAGMENT_SHADER = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -80,15 +76,9 @@ const FRAGMENT_SHADER = /* glsl */ `
  * Image Utilities
  *────────────────────────────────────────────────────────────────────────────*/
 
-/**
- * Fetch image as blob → create object URL → load <img>.
- * Keeps the blob URL alive (caller must revoke it).
- * Returns { img, blobUrl } so caller controls the lifecycle.
- */
 async function fetchImageBlob(url: string): Promise<{ img: HTMLImageElement; blobUrl: string; rawBlob: Blob }> {
   let rawBlob: Blob;
 
-  // If in Tauri environment, use native Rust fetch to bypass CORS completely
   if (typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)) {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -119,10 +109,6 @@ async function fetchImageBlob(url: string): Promise<{ img: HTMLImageElement; blo
   return { img, blobUrl, rawBlob };
 }
 
-/**
- * Draws an image into a canvas at given resolution.
- * Returns whether the canvas is taint-free (readable).
- */
 function imageToCanvas(
   img: HTMLImageElement,
   maxDim = 768
@@ -141,15 +127,6 @@ function imageToCanvas(
   return { canvas, clean };
 }
 
-/**
- * Build a smooth multi-layer depth map:
- *   - luminance contribution (brighter = closer)
- *   - radial centre proximity (centre = closer)
- *   - gaussian blur pass for smoothness
- *   - zeroes depth for transparent background pixels
- *
- * Result: grayscale canvas, white=close, black=far.
- */
 function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElement {
   const SIZE = 256;
   const out = document.createElement("canvas");
@@ -173,7 +150,6 @@ function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElem
   const cy = SIZE / 2;
   const maxDist = Math.sqrt(cx * cx + cy * cy);
 
-  // Pass 1: compute raw depth per pixel
   const raw = new Float32Array(SIZE * SIZE);
   let minV = 1, maxV = 0;
 
@@ -182,7 +158,6 @@ function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElem
     const yi = Math.floor(i / 4 / SIZE);
     const alpha = px[i + 3];
 
-    // Zero out depth for transparent background pixels
     if (alpha < 20) {
       raw[yi * SIZE + xi] = 0;
       continue;
@@ -203,7 +178,6 @@ function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElem
     if (depth > maxV) maxV = depth;
   }
 
-  // Pass 2: normalise and write back
   const range = maxV - minV || 1;
   for (let i = 0; i < px.length; i += 4) {
     const idx = i / 4;
@@ -220,7 +194,6 @@ function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElem
 
   ctx.putImageData(imgData, 0, 0);
 
-  // Pass 3: blur for smoothness
   const blurred = document.createElement("canvas");
   blurred.width = SIZE;
   blurred.height = SIZE;
@@ -231,12 +204,6 @@ function buildDepthMap(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElem
   return blurred;
 }
 
-/**
- * Smart algorithmic background extraction fallback.
- * Used when AI model is offline or unavailable.
- * Samples border pixels to build a background color model, combines with center-salience,
- * and sets alpha to 0 for background pixels while preserving the main subject.
- */
 function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLCanvasElement {
   const out = document.createElement("canvas");
   out.width = src.width;
@@ -254,7 +221,6 @@ function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLC
     const cy = h / 2;
     const maxCenterDist = Math.sqrt(cx * cx + cy * cy);
 
-    // 1. Sample border pixels
     const bgSamples: Array<[number, number, number]> = [];
     const stepX = Math.max(1, Math.floor(w / 32));
     const stepY = Math.max(1, Math.floor(h / 32));
@@ -280,7 +246,6 @@ function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLC
     avgG /= bgSamples.length;
     avgB /= bgSamples.length;
 
-    // 2. Classify each pixel
     for (let i = 0; i < px.length; i += 4) {
       const x = (i / 4) % w;
       const y = Math.floor((i / 4) / w);
@@ -296,7 +261,6 @@ function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLC
       const avgDist = Math.sqrt((r - avgR) ** 2 + (g - avgG) ** 2 + (b - avgB) ** 2);
       const effectiveBgDist = Math.min(minDist, avgDist);
       const centerDistNorm = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxCenterDist;
-
       const bgMatchThreshold = 45 + (1 - centerDistNorm) * 25;
 
       if (effectiveBgDist < bgMatchThreshold) {
@@ -314,7 +278,6 @@ function extractSubjectFallback(src: HTMLCanvasElement, isClean: boolean): HTMLC
 
     ctx.putImageData(imgData, 0, 0);
 
-    // Apply edge fade to remove frame borders
     const d = ctx.getImageData(0, 0, w, h);
     const p = d.data;
     const innerR = Math.min(w, h) * 0.36;
@@ -353,7 +316,9 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     group: THREE.Group;
-    material: THREE.ShaderMaterial;
+    cardMesh: THREE.Mesh;
+    triposrMesh?: THREE.Mesh;
+    cardMaterial: THREE.ShaderMaterial;
     rafId: number;
     materials: THREE.Material[];
     geometries: THREE.BufferGeometry[];
@@ -365,12 +330,12 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
   const [progress, setProgress] = useState<StepProgress>({ label: "", percent: 0 });
   const [errorMsg, setErrorMsg] = useState("");
   const [autoSpin, setAutoSpin] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("cutout");
+  const [viewMode, setViewMode] = useState<ViewMode>("triposr");
   const [depthScale, setDepthScale] = useState(0.4);
   const [aiSegmented, setAiSegmented] = useState(false);
   const [smartFallback, setSmartFallback] = useState(false);
 
-  // Cached canvases for instant mode switching
+  // Cached canvases
   const fullCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cutoutCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isCleanRef = useRef(true);
@@ -402,39 +367,49 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
   /* ── Live depth scale update ─────────────────────────────────────────── */
 
   useEffect(() => {
-    if (sceneRef.current?.material) {
-      sceneRef.current.material.uniforms.uDepthScale.value = depthScale;
+    if (sceneRef.current?.cardMaterial) {
+      sceneRef.current.cardMaterial.uniforms.uDepthScale.value = depthScale;
     }
   }, [depthScale]);
 
-  /* ── Mode switching (instant, no reload) ─────────────────────────────── */
+  /* ── Mode switching ──────────────────────────────────────────────────── */
 
-  const switchMode = useCallback((newMode: ViewMode) => {
+  const switchMode = useCallback(async (newMode: ViewMode) => {
     setViewMode(newMode);
     const s = sceneRef.current;
     if (!s) return;
 
-    const sourceCanvas =
-      newMode === "cutout"
-        ? (cutoutCanvasRef.current ?? fullCanvasRef.current)
-        : fullCanvasRef.current;
-    if (!sourceCanvas) return;
+    if (newMode === "triposr") {
+      if (s.triposrMesh) {
+        s.triposrMesh.visible = true;
+        s.cardMesh.visible = false;
+      }
+    } else {
+      if (s.triposrMesh) s.triposrMesh.visible = false;
+      s.cardMesh.visible = true;
 
-    const depthCanvas = buildDepthMap(sourceCanvas, isCleanRef.current);
-    const newTexture = new THREE.CanvasTexture(sourceCanvas);
-    newTexture.colorSpace = THREE.SRGBColorSpace;
-    const newDepth = new THREE.CanvasTexture(depthCanvas);
+      const sourceCanvas =
+        newMode === "cutout"
+          ? (cutoutCanvasRef.current ?? fullCanvasRef.current)
+          : fullCanvasRef.current;
+      if (!sourceCanvas) return;
 
-    s.material.uniforms.uTexture.value = newTexture;
-    s.material.uniforms.uDepthMap.value = newDepth;
-    s.material.uniforms.uAlphaThreshold.value = newMode === "card" ? 0.01 : 0.15;
-    s.material.needsUpdate = true;
-    s.textures.push(newTexture, newDepth);
+      const depthCanvas = buildDepthMap(sourceCanvas, isCleanRef.current);
+      const newTexture = new THREE.CanvasTexture(sourceCanvas);
+      newTexture.colorSpace = THREE.SRGBColorSpace;
+      const newDepth = new THREE.CanvasTexture(depthCanvas);
+
+      s.cardMaterial.uniforms.uTexture.value = newTexture;
+      s.cardMaterial.uniforms.uDepthMap.value = newDepth;
+      s.cardMaterial.uniforms.uAlphaThreshold.value = newMode === "card" ? 0.01 : 0.15;
+      s.cardMaterial.needsUpdate = true;
+      s.textures.push(newTexture, newDepth);
+    }
   }, []);
 
   /* ── Main pipeline ───────────────────────────────────────────────────── */
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (targetMode: ViewMode = "triposr") => {
     if (!canvasRef.current || !containerRef.current) return;
     dispose();
     setStatus("loading");
@@ -456,28 +431,25 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       fullCanvasRef.current = sourceCanvas;
       isCleanRef.current = isClean;
 
-      setProgress({ label: "Computing depth map…", percent: 28 });
+      setProgress({ label: "Computing depth map…", percent: 18 });
 
-      /* ── Step 2: AI background removal (with smart fallback) ───────── */
+      /* ── Step 2: AI background removal ──────────────────────────────── */
       let cutoutCanvas: HTMLCanvasElement;
       let usedAI = false;
       let usedFallback = false;
 
       try {
         const { removeBackground } = await import("@imgly/background-removal");
-        setProgress({ label: "Loading AI segmentation model…", percent: 33 });
+        setProgress({ label: "Loading AI background removal…", percent: 22 });
 
         const resultBlob = await removeBackground(rawBlob, {
           publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.7.0/dist/",
           model: "isnet_quint8",
           output: { format: "image/png", quality: 0.95 },
-          progress: (key: string, current: number, total: number) => {
+          progress: (_key: string, current: number, total: number) => {
             if (total > 0) {
-              const pct = Math.min(88, 33 + Math.round((current / total) * 55));
-              const label = String(key).includes("fetch")
-                ? "Downloading AI model (first time only)…"
-                : "Isolating subject with AI…";
-              setProgress({ label, percent: pct });
+              const pct = Math.min(45, 22 + Math.round((current / total) * 23));
+              setProgress({ label: "Isolating species cutout with AI…", percent: pct });
             }
           },
         });
@@ -495,48 +467,22 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
         cutoutCanvas = segCanvas;
         usedAI = true;
       } catch (bgErr) {
-        console.warn("[3D Viewer] Primary AI BG removal failed, retrying default CDN...", bgErr);
-        try {
-          const { removeBackground } = await import("@imgly/background-removal");
-          const resultBlob = await removeBackground(rawBlob, {
-            output: { format: "image/png", quality: 0.95 }
-          });
-          const segBlobUrl = URL.createObjectURL(resultBlob);
-          const segImg = await new Promise<HTMLImageElement>((res, rej) => {
-            const el = new Image();
-            el.onload = () => res(el);
-            el.onerror = rej;
-            el.src = segBlobUrl;
-          });
-          URL.revokeObjectURL(segBlobUrl);
-
-          const { canvas: segCanvas } = imageToCanvas(segImg);
-          cutoutCanvas = segCanvas;
-          usedAI = true;
-        } catch (secErr) {
-          console.warn("[3D Viewer] Secondary AI BG removal failed → applying smart extraction fallback", secErr);
-          cutoutCanvas = extractSubjectFallback(sourceCanvas, isClean);
-          usedFallback = true;
-        }
+        console.warn("[3D Viewer] AI BG removal fallback triggered:", bgErr);
+        cutoutCanvas = extractSubjectFallback(sourceCanvas, isClean);
+        usedFallback = true;
       }
 
       cutoutCanvasRef.current = cutoutCanvas;
       setAiSegmented(usedAI);
       setSmartFallback(usedFallback);
 
-      // Default to cutout mode
-      const initialMode: ViewMode = "cutout";
-      setViewMode(initialMode);
-
       if (primaryBlobUrl) {
         URL.revokeObjectURL(primaryBlobUrl);
         primaryBlobUrl = null;
       }
 
-      setProgress({ label: "Building 3D scene…", percent: 90 });
-
-      /* ── Step 3: Build Three.js scene ─────────────────────────────── */
-      const activeCanvas = initialMode === "cutout" ? cutoutCanvas : sourceCanvas;
+      /* ── Step 3: Build Three.js base scene ──────────────────────────── */
+      const activeCanvas = cutoutCanvas;
       const depthCanvas = buildDepthMap(activeCanvas, isClean);
 
       const container = containerRef.current!;
@@ -575,18 +521,12 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       const group = new THREE.Group();
       scene.add(group);
 
-      // ── Subject texture ──
+      // Subject 2D plane texture & shader
       const subjectTexture = new THREE.CanvasTexture(activeCanvas);
       subjectTexture.colorSpace = THREE.SRGBColorSpace;
-      subjectTexture.minFilter = THREE.LinearMipMapLinearFilter;
-      subjectTexture.magFilter = THREE.LinearFilter;
-      subjectTexture.generateMipmaps = true;
 
       const depthTexture = new THREE.CanvasTexture(depthCanvas);
-      depthTexture.minFilter = THREE.LinearFilter;
-      depthTexture.magFilter = THREE.LinearFilter;
 
-      // ── Subject mesh ──
       const aspect = activeCanvas.width / activeCanvas.height;
       const planeH = 2.2;
       const planeW = planeH * aspect;
@@ -606,11 +546,12 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
         depthWrite: false,
       });
 
-      const subjectMesh = new THREE.Mesh(planeGeo, subjectMat);
-      subjectMesh.position.y = 0.12;
-      group.add(subjectMesh);
+      const cardMesh = new THREE.Mesh(planeGeo, subjectMat);
+      cardMesh.position.y = 0.12;
+      cardMesh.visible = targetMode !== "triposr";
+      group.add(cardMesh);
 
-      // ── Pedestal ──
+      // Pedestal
       const baseR = Math.max(planeW, planeH) * 0.52;
       const baseGeo = new THREE.CylinderGeometry(baseR, baseR * 1.1, 0.08, 72);
       const baseMat = new THREE.MeshStandardMaterial({
@@ -636,19 +577,19 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       ringMesh.position.y = baseMesh.position.y + 0.05;
       group.add(ringMesh);
 
-      // ── Lighting ──
-      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 0.85));
 
-      const key = new THREE.DirectionalLight(0xfff5e0, 1.6);
+      const key = new THREE.DirectionalLight(0xfff5e0, 1.8);
       key.position.set(4, 5, 6);
       key.castShadow = true;
       scene.add(key);
 
-      const fill = new THREE.DirectionalLight(0x8899cc, 0.45);
+      const fill = new THREE.DirectionalLight(0x8899cc, 0.65);
       fill.position.set(-4, 1, 3);
       scene.add(fill);
 
-      const rim = new THREE.PointLight(0xeab308, 0.8, 14);
+      const rim = new THREE.PointLight(0xeab308, 0.9, 14);
       rim.position.set(-2, -1.5, 2.5);
       scene.add(rim);
 
@@ -656,7 +597,51 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       const geometries: THREE.BufferGeometry[] = [planeGeo, baseGeo, ringGeo];
       const textures: THREE.Texture[] = [subjectTexture, depthTexture];
 
-      // ── Animation ──
+      let triposrMesh: THREE.Mesh | undefined;
+
+      /* ── Step 4: TripoSR 3D Mesh Generation (if targetMode === "triposr") ── */
+      if (targetMode === "triposr") {
+        try {
+          const meshData: MeshData = await generateTripoSRMesh(
+            cutoutCanvas,
+            (prog) => setProgress({ label: prog.label, percent: Math.max(48, prog.percent) }),
+            64
+          );
+
+          const triposrGeo = new THREE.BufferGeometry();
+          triposrGeo.setAttribute("position", new THREE.BufferAttribute(meshData.positions, 3));
+          triposrGeo.setAttribute("normal", new THREE.BufferAttribute(meshData.normals, 3));
+          triposrGeo.setAttribute("color", new THREE.BufferAttribute(meshData.colors, 3));
+
+          triposrGeo.center();
+          triposrGeo.computeBoundingSphere();
+          const radius = triposrGeo.boundingSphere?.radius || 1.0;
+          const targetScale = 1.6 / radius;
+          triposrGeo.scale(targetScale, targetScale, targetScale);
+
+          const triposrMat = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            roughness: 0.35,
+            metalness: 0.15,
+            side: THREE.DoubleSide,
+          });
+
+          triposrMesh = new THREE.Mesh(triposrGeo, triposrMat);
+          triposrMesh.position.y = 0.05;
+          triposrMesh.castShadow = true;
+          triposrMesh.receiveShadow = true;
+          group.add(triposrMesh);
+
+          materials.push(triposrMat);
+          geometries.push(triposrGeo);
+        } catch (tErr) {
+          console.warn("[3D Viewer] TripoSR 3D Mesh generation failed, falling back to 3D cutout mode:", tErr);
+          cardMesh.visible = true;
+          setViewMode("cutout");
+        }
+      }
+
+      // Animation
       let spinAngle = 0;
       let rafId = 0;
 
@@ -665,7 +650,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
 
         if (autoSpinRef.current && !isDragging.current) {
           spinAngle += 0.005;
-          group.rotation.y += (Math.sin(spinAngle) * 0.35 - group.rotation.y) * 0.025;
+          group.rotation.y += (Math.sin(spinAngle) * 0.45 - group.rotation.y) * 0.025;
           group.rotation.x += (0 - group.rotation.x) * 0.04;
         } else {
           group.rotation.y += (targetRotation.current.y - group.rotation.y) * 0.1;
@@ -678,10 +663,11 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       animate();
 
       sceneRef.current = {
-        renderer, scene, camera, group, material: subjectMat,
-        rafId, materials, geometries, textures, resizeObserver,
+        renderer, scene, camera, group, cardMesh, triposrMesh,
+        cardMaterial: subjectMat, rafId, materials, geometries, textures, resizeObserver,
       };
 
+      setViewMode(targetMode);
       setProgress({ label: "Done!", percent: 100 });
       setStatus("ready");
 
@@ -691,7 +677,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
       setStatus("error");
     }
-  }, [imageUrl, dispose, depthScale]);
+  }, [imageUrl, depthScale]);
 
   /* ── Pointer / wheel ─────────────────────────────────────────────────── */
 
@@ -707,14 +693,14 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
     const dx = e.clientX - lastPointer.current.x;
     const dy = e.clientY - lastPointer.current.y;
     targetRotation.current.y += dx * 0.007;
-    targetRotation.current.x = Math.max(-0.75, Math.min(0.75, targetRotation.current.x + dy * 0.007));
+    targetRotation.current.x = Math.max(-0.85, Math.min(0.85, targetRotation.current.x + dy * 0.007));
     lastPointer.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const onPointerUp = useCallback(() => { isDragging.current = false; }, []);
 
   const onWheel = useCallback((e: React.WheelEvent) => {
-    targetZoom.current = Math.max(2.5, Math.min(9, targetZoom.current + e.deltaY * 0.005));
+    targetZoom.current = Math.max(2.2, Math.min(9, targetZoom.current + e.deltaY * 0.005));
   }, []);
 
   const resetView = useCallback(() => {
@@ -723,8 +709,6 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
     setAutoSpin(true);
   }, []);
 
-  /* ── Render ──────────────────────────────────────────────────────────── */
-
   return (
     <div className="space-y-3">
 
@@ -732,24 +716,32 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
       {status === "idle" && (
         <div className="flex flex-col items-center justify-center gap-5 py-10 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-app-accent/30 bg-app-accent/10 text-app-accent shadow-[0_0_24px_rgba(234,179,8,0.15)]">
-            <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25" />
-            </svg>
+            <Box className="h-8 w-8" />
           </div>
           <div>
-            <h4 className="text-base font-semibold text-white">Interactive 3D Depth Model</h4>
+            <h4 className="text-base font-semibold text-white">TripoSR AI 3D Mesh Generator</h4>
             <p className="mt-1 text-xs text-app-muted max-w-xs mx-auto leading-relaxed">
-              Builds a WebGL depth-displaced 3D model from the species photo, with optional AI background isolation.
+              Generates a full 3D neural mesh of the animal from a single photo using on-device TripoSR ONNX.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void generate()}
-            className="flex items-center gap-2 rounded-xl border border-app-accent/40 bg-app-accent/15 px-6 py-2.5 text-sm font-semibold text-app-accent hover:bg-app-accent/25 active:scale-95 transition cursor-pointer shadow-lg"
-          >
-            <Play className="h-4 w-4" />
-            Generate 3D Model
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void generate("triposr")}
+              className="flex items-center gap-2 rounded-xl border border-app-accent/40 bg-app-accent/15 px-6 py-2.5 text-sm font-semibold text-app-accent hover:bg-app-accent/25 active:scale-95 transition cursor-pointer shadow-lg"
+            >
+              <Sparkles className="h-4 w-4" />
+              Generate TripoSR 3D Mesh
+            </button>
+            <button
+              type="button"
+              onClick={() => void generate("cutout")}
+              className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-semibold text-app-soft hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              <Layers className="h-4 w-4" />
+              3D Relief Cutout
+            </button>
+          </div>
         </div>
       )}
 
@@ -773,7 +765,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
             </div>
           </div>
           <p className="text-[11px] text-app-muted leading-relaxed">
-            All processing happens on-device — nothing is uploaded.
+            All AI processing runs 100% on-device via ONNX Runtime Web. Zero Python needed.
           </p>
         </div>
       )}
@@ -785,7 +777,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
           <p className="text-xs text-app-muted break-all">{errorMsg}</p>
           <button
             type="button"
-            onClick={() => void generate()}
+            onClick={() => void generate("triposr")}
             className="text-xs text-app-accent hover:underline font-medium cursor-pointer"
           >
             Try again
@@ -821,18 +813,18 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
             <div className="flex items-center p-0.5 rounded-full bg-black/70 border border-white/15 backdrop-blur-md">
               <button
                 type="button"
-                onClick={() => switchMode("card")}
-                title="Full photo as 3D relief card (most reliable)"
+                onClick={() => void switchMode("triposr")}
+                title="Full TripoSR 3D Mesh reconstructed with neural implicit fields"
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-                  viewMode === "card" ? "bg-app-accent text-black font-semibold" : "text-app-soft hover:text-white"
+                  viewMode === "triposr" ? "bg-app-accent text-black font-semibold" : "text-app-soft hover:text-white"
                 }`}
               >
-                <ImageIcon className="h-3 w-3" />
-                <span>3D Card</span>
+                <Box className="h-3 w-3" />
+                <span>TripoSR 3D Mesh</span>
               </button>
               <button
                 type="button"
-                onClick={() => switchMode("cutout")}
+                onClick={() => void switchMode("cutout")}
                 title="Background-isolated cutout in 3D space"
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
                   viewMode === "cutout" ? "bg-app-accent text-black font-semibold" : "text-app-soft hover:text-white"
@@ -841,31 +833,44 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
                 <Layers className="h-3 w-3" />
                 <span>Cutout{aiSegmented ? " ✦AI" : smartFallback ? " ✦Smart" : ""}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => void switchMode("card")}
+                title="Full photo as 3D relief card"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                  viewMode === "card" ? "bg-app-accent text-black font-semibold" : "text-app-soft hover:text-white"
+                }`}
+              >
+                <ImageIcon className="h-3 w-3" />
+                <span>Card</span>
+              </button>
             </div>
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
-            {/* Depth control */}
-            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-xs text-app-soft">
-              <Sliders className="h-3 w-3 text-app-accent shrink-0" />
-              <span className="text-[10px] font-medium mr-0.5">Depth</span>
-              {([["Lo", 0.2], ["Mid", 0.4], ["Hi", 0.65]] as [string, number][]).map(([lbl, val]) => (
-                <button
-                  key={lbl}
-                  type="button"
-                  onClick={() => setDepthScale(val)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition ${
-                    depthScale === val ? "bg-white/25 text-white" : "hover:text-white"
-                  }`}
-                >
-                  {lbl}
-                </button>
-              ))}
-            </div>
+            {/* Depth control for card/cutout */}
+            {viewMode !== "triposr" && (
+              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-xs text-app-soft">
+                <Sliders className="h-3 w-3 text-app-accent shrink-0" />
+                <span className="text-[10px] font-medium mr-0.5">Depth</span>
+                {([["Lo", 0.2], ["Mid", 0.4], ["Hi", 0.65]] as [string, number][]).map(([lbl, val]) => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    onClick={() => setDepthScale(val)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition ${
+                      depthScale === val ? "bg-white/25 text-white" : "hover:text-white"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* Re-generate */}
             <button
               type="button"
-              onClick={() => void generate()}
+              onClick={() => void generate(viewMode)}
               className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/15 text-xs text-app-soft hover:text-white hover:bg-white/15 backdrop-blur-md transition cursor-pointer font-medium"
             >
               <RotateCw className="h-3 w-3" />
@@ -878,7 +883,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
         <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
           {[
             { title: autoSpin ? "Pause" : "Spin", icon: autoSpin ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />, action: () => setAutoSpin((v) => !v) },
-            { title: "Zoom in",  icon: <ZoomIn  className="h-3.5 w-3.5" />, action: () => { targetZoom.current = Math.max(2.5, targetZoom.current - 0.7); } },
+            { title: "Zoom in",  icon: <ZoomIn  className="h-3.5 w-3.5" />, action: () => { targetZoom.current = Math.max(2.2, targetZoom.current - 0.7); } },
             { title: "Zoom out", icon: <ZoomOut className="h-3.5 w-3.5" />, action: () => { targetZoom.current = Math.min(9, targetZoom.current + 0.7); } },
             { title: "Rotate L", icon: <RotateCcw className="h-3.5 w-3.5" />, action: () => { setAutoSpin(false); targetRotation.current.y -= 0.5; } },
             { title: "Rotate R", icon: <RotateCw  className="h-3.5 w-3.5" />, action: () => { setAutoSpin(false); targetRotation.current.y += 0.5; } },
@@ -905,7 +910,7 @@ export function SpeciesViewer3D({ imageUrl, name }: SpeciesViewer3DProps) {
         {/* Hint */}
         <div className="absolute bottom-3 left-3 text-[11px] text-app-muted/60 select-none pointer-events-none flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
-          Drag · Scroll to zoom
+          Drag to rotate · Scroll to zoom
         </div>
       </div>
     </div>
