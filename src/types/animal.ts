@@ -80,3 +80,15 @@ export type AppSettings = {
   enableErrorConsoleLogs?: boolean;
   youtubeApiKey?: string;
 };
+
+export type Folder = {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  animalIds: string[];
+  createdAt: number;
+  updatedAt: number;
+};
+

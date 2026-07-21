@@ -7,9 +7,11 @@ import { SpeciesHero } from "../components/SpeciesHero";
 import { useSpeciesMedia } from "../hooks/useSpeciesMedia";
 import { clearAnimalMediaCache } from "../services/speciesMedia";
 import { animalMap } from "../data/animals";
+import { findMatchingEcosystem } from "../data/ecosystems";
 import { getFavorites, getBookmarkedSpecies, getCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite, deleteSpeciesRecordOnly } from "../services/cache";
 import { hydrateSpeciesProfile, hydrateSpeciesWithAI } from "../services/speciesStore";
-import type { Animal } from "../types/animal";
+import { searchSpeciesVideos } from "../services/youtubeService";
+import type { Animal, SpeciesVideo } from "../types/animal";
 import { toastService } from "../services/toastService";
 import { reportError } from "../services/errorReporter";
 import {
@@ -25,7 +27,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlayIcon,
+  FolderIcon,
 } from "../components/icons";
+import { AddToFolderModal } from "../components/AddToFolderModal";
+import { SpeciesViewer3D } from "../components/SpeciesViewer3D";
+import { RefreshCw, Box, Loader2 } from "lucide-react";
 
 function hasUnknownClassification(animal: Animal | null): boolean {
   if (!animal || !animal.classification) return true;
@@ -147,12 +153,100 @@ export default function SpeciesDetail() {
   const [loading, setLoading] = useState(() => !baseAnimal && (id.startsWith("gbif-") || id.startsWith("wiki-")));
   const [favorites, setFavorites] = useState(() => getFavorites());
   const [bookmarks, setBookmarks] = useState(() => getBookmarkedSpecies());
-  const { gallery } = useSpeciesMedia(animal, "full");
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [show3DSection, setShow3DSection] = useState(false);
+  const [showVideosSection, setShowVideosSection] = useState(false);
+  const [refreshingSection, setRefreshingSection] = useState<string | null>(null);
+  const [, setMediaVersion] = useState(0);
+  const { gallery, primaryImage } = useSpeciesMedia(animal, "full");
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [localVideos, setLocalVideos] = useState<SpeciesVideo[]>(() => animal?.videos ?? []);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+
+  useEffect(() => {
+    setLocalVideos(animal?.videos ?? []);
+    setCurrentVideoIndex(0);
+  }, [animal]);
+
+  useEffect(() => {
+    if (showVideosSection && animal) {
+      if (localVideos.length === 0 && (!animal.videos || animal.videos.length === 0)) {
+        setLoadingVideos(true);
+        searchSpeciesVideos(animal.commonName, animal.scientificName)
+          .then((vids) => {
+            setLocalVideos(vids);
+            if (vids.length > 0) {
+              const updated = { ...animal, videos: vids };
+              setAnimal(updated);
+              setCachedSpecies(updated);
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to load videos on expand:", err);
+          })
+          .finally(() => {
+            setLoadingVideos(false);
+          });
+      }
+    }
+  }, [showVideosSection, animal, localVideos.length]);
+
+  const primaryEcosystem = useMemo(() => {
+    return animal ? findMatchingEcosystem(animal) : null;
+  }, [animal]);
+
+  // Resolve the best available image URL for the 3D viewer
+  const primaryImageUrl = useMemo(() => {
+    if (!animal) return null;
+    return animal.heroImage ?? animal.images?.[0] ?? primaryImage?.url ?? null;
+  }, [animal, primaryImage]);
+
+  async function handleRefreshSection(sectionName: string) {
+    if (!animal) return;
+    setRefreshingSection(sectionName);
+
+    if (sectionName === "gallery") {
+      toastService.info(`Re-searching reference media gallery for "${animal.commonName}"...`);
+      clearAnimalMediaCache(animal.id);
+      setMediaVersion((v) => v + 1);
+      toastService.success(`Refreshed media gallery for "${animal.commonName}"`);
+      setRefreshingSection(null);
+      return;
+    }
+
+    if (sectionName === "videos") {
+      toastService.info(`Re-searching natural history videos for "${animal.commonName}"...`);
+      try {
+        const vids = await searchSpeciesVideos(animal.commonName, animal.scientificName);
+        setLocalVideos(vids);
+        const updated = { ...animal, videos: vids };
+        setAnimal(updated);
+        setCachedSpecies(updated);
+        toastService.success(`Refreshed videos for "${animal.commonName}"`);
+      } catch (err) {
+        reportError(`Failed to refresh videos for "${animal.commonName}"`, err);
+      } finally {
+        setRefreshingSection(null);
+      }
+      return;
+    }
+
+    toastService.info(`Re-enriching ${sectionName} data for "${animal.commonName}"...`);
+    try {
+      const hydrated = await hydrateSpeciesWithAI(animal);
+      setAnimal(hydrated);
+      setCachedSpecies(hydrated);
+      toastService.success(`Refreshed ${sectionName} for "${animal.commonName}"`);
+    } catch (err) {
+      reportError(`Failed to refresh ${sectionName} for "${animal.commonName}"`, err);
+    } finally {
+      setRefreshingSection(null);
+    }
+  }
 
   const videos = useMemo(() => {
-    if (animal?.videos && animal.videos.length > 0) {
-      return animal.videos.map((v) => ({
+    if (localVideos && localVideos.length > 0) {
+      return localVideos.map((v) => ({
         title: v.title,
         duration: v.duration,
         type: v.type,
@@ -164,7 +258,7 @@ export default function SpeciesDetail() {
       }));
     }
     return [];
-  }, [animal]);
+  }, [localVideos]);
 
   useEffect(() => {
     if (!id) {
@@ -274,8 +368,6 @@ export default function SpeciesDetail() {
     );
   }
 
-  const currentAnimal = animal;
-
   return (
     <div className="page-frame">
       <div className="fixed top-[5.5rem] left-8 lg:left-[20.5rem] z-50">
@@ -294,56 +386,100 @@ export default function SpeciesDetail() {
         isFavorite={favorites.includes(animal.id)}
       />
 
-      <section className="page-card rounded-[1.75rem] p-6">
-        <div className="flex flex-wrap gap-3">
-          <Link to={`/ai?species=${encodeURIComponent(animal.commonName)}`} className="ghost-button flex items-center gap-2">
-            <BrainSparkIcon className="h-4 w-4 text-app-accent" />
-            Ask AI about this species
+      <section className="page-card rounded-[1.75rem] p-4 sm:p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 w-full items-center">
+          <Link
+            to={`/ai?species=${encodeURIComponent(animal.commonName)}`}
+            className="ghost-button flex items-center justify-center gap-2 text-center py-2.5 px-3 min-h-0 text-xs sm:text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-app-accent/40 transition rounded-xl text-app-text cursor-pointer w-full"
+          >
+            <BrainSparkIcon className="h-4 w-4 text-app-accent shrink-0" />
+            <span>Ask AI about species</span>
           </Link>
-          <Link to={`/explorer?continent=${encodeURIComponent(animal.continents[0] ?? "Africa")}`} className="ghost-button flex items-center gap-2">
-            <CompassIcon className="h-4 w-4" />
-            Open mapped region
+          <Link
+            to={primaryEcosystem ? `/ecosystems/${primaryEcosystem.id}` : `/explorer?continent=${encodeURIComponent(animal.continents[0] ?? "Africa")}`}
+            title={primaryEcosystem ? `Explore ${primaryEcosystem.title} ecosystem` : "Open mapped region"}
+            className="ghost-button flex items-center justify-center gap-2 text-center py-2.5 px-3 min-h-0 text-xs sm:text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-app-accent/40 transition rounded-xl text-app-text cursor-pointer w-full"
+          >
+            <CompassIcon className="h-4 w-4 text-app-accent shrink-0" />
+            <span>Open mapped region</span>
           </Link>
-          <button type="button" className="ghost-button flex items-center gap-2" onClick={() => setFavorites(toggleFavorite(animal.id))}>
+          <button
+            type="button"
+            className="ghost-button flex items-center justify-center gap-2 text-center py-2.5 px-3 min-h-0 text-xs sm:text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-app-accent/40 transition rounded-xl text-app-text cursor-pointer w-full"
+            onClick={() => setFavorites(toggleFavorite(animal.id))}
+          >
             {favorites.includes(animal.id) ? (
               <>
-                <HeartSolidIcon className="h-4 w-4 text-app-accent" />
-                Remove favorite
+                <HeartSolidIcon className="h-4 w-4 text-app-accent shrink-0" />
+                <span>Remove favorite</span>
               </>
             ) : (
               <>
-                <HeartIcon className="h-4 w-4" />
-                Add favorite
+                <HeartIcon className="h-4 w-4 text-app-accent shrink-0" />
+                <span>Add favorite</span>
               </>
             )}
           </button>
-          <button type="button" className="ghost-button flex items-center gap-2" onClick={() => setBookmarks(toggleBookmark(animal.id))}>
+          <button
+            type="button"
+            className="ghost-button flex items-center justify-center gap-2 text-center py-2.5 px-3 min-h-0 text-xs sm:text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-app-accent/40 transition rounded-xl text-app-text cursor-pointer w-full"
+            onClick={() => setBookmarks(toggleBookmark(animal.id))}
+          >
             {bookmarks.includes(animal.id) ? (
               <>
-                <BookmarkSolidIcon className="h-4 w-4 text-app-accent" />
-                Remove bookmark
+                <BookmarkSolidIcon className="h-4 w-4 text-app-accent shrink-0" />
+                <span>Remove bookmark</span>
               </>
             ) : (
               <>
-                <BookmarkIcon className="h-4 w-4" />
-                Add bookmark
+                <BookmarkIcon className="h-4 w-4 text-app-accent shrink-0" />
+                <span>Add bookmark</span>
               </>
             )}
           </button>
-          {currentAnimal.partial ? <span className="tag-chip">Partial profile</span> : null}
+          <button
+            type="button"
+            className="ghost-button flex items-center justify-center gap-2 text-center py-2.5 px-3 min-h-0 text-xs sm:text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-app-accent/40 transition rounded-xl text-app-text cursor-pointer w-full"
+            onClick={() => setIsFolderModalOpen(true)}
+          >
+            <FolderIcon className="h-4 w-4 text-app-accent shrink-0" />
+            <span>Add to collection</span>
+          </button>
         </div>
       </section>
+
+      <AddToFolderModal
+        animal={animal}
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+      />
 
       <FactGrid animal={animal} />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(18rem,0.88fr)_minmax(0,1.12fr)]">
-        <ClassificationTree animal={animal} />
+        <ClassificationTree
+          animal={animal}
+          onRefresh={() => handleRefreshSection("taxonomy")}
+          isRefreshing={refreshingSection === "taxonomy"}
+        />
         <div className="grid gap-4">
           <div className="page-card rounded-[1.5rem] p-5">
-            <h2 className="page-section-title flex items-center gap-2">
-              <EyeIcon className="h-5 w-5 text-app-accent" />
-              Overview
-            </h2>
+            <div className="flex items-center justify-between border-b border-white/8 pb-3 mb-4">
+              <h2 className="page-section-title flex items-center gap-2 mb-0">
+                <EyeIcon className="h-5 w-5 text-app-accent" />
+                <span>Overview</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => handleRefreshSection("overview")}
+                disabled={refreshingSection === "overview"}
+                title="Search / re-enrich overview details"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "overview" ? "animate-spin text-app-accent" : ""}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
             {animal.partial ? (
               <div className="space-y-2 mt-4">
                 <div className="h-4 bg-white/5 animate-pulse rounded w-full" />
@@ -352,7 +488,7 @@ export default function SpeciesDetail() {
               </div>
             ) : (
               <>
-                <p className="mt-4 text-sm leading-7 text-app-muted">{animal.detailedDescription}</p>
+                <p className="mt-2 text-sm leading-7 text-app-muted">{animal.detailedDescription}</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {animal.habitat.map((item) => (
                     <Link key={item} to={`/species?habitat=${encodeURIComponent(item)}`} className="tag-chip interactive-chip">
@@ -365,17 +501,29 @@ export default function SpeciesDetail() {
           </div>
 
           <div className="page-card rounded-[1.5rem] p-5">
-            <h2 className="page-section-title flex items-center gap-2">
-              <BinocularsIcon className="h-5 w-5 text-app-accent" />
-              Field Notes
-            </h2>
+            <div className="flex items-center justify-between border-b border-white/8 pb-3 mb-4">
+              <h2 className="page-section-title flex items-center gap-2 mb-0">
+                <BinocularsIcon className="h-5 w-5 text-app-accent" />
+                <span>Field Notes</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => handleRefreshSection("facts")}
+                disabled={refreshingSection === "facts"}
+                title="Re-search & refresh cool facts"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "facts" ? "animate-spin text-app-accent" : ""}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
             {animal.partial ? (
               <div className="space-y-3 mt-4">
                 <div className="h-10 bg-white/5 animate-pulse rounded-[1.2rem] w-full" />
                 <div className="h-10 bg-white/5 animate-pulse rounded-[1.2rem] w-11/12" />
               </div>
             ) : (
-              <ul className="mt-4 grid gap-3 text-sm leading-7 text-app-muted">
+              <ul className="mt-2 grid gap-3 text-sm leading-7 text-app-muted">
                 {animal.coolFacts.map((fact) => (
                   <li key={fact} className="rounded-[1.2rem] border border-white/7 bg-white/[0.03] px-4 py-3">
                     {fact}
@@ -391,11 +539,23 @@ export default function SpeciesDetail() {
       </section>
 
       <section className="page-card rounded-[1.5rem] p-5">
-        <h2 className="page-section-title flex items-center gap-2">
-          <ImageIcon className="h-5 w-5 text-app-accent" />
-          Reference Gallery
-        </h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="flex items-center justify-between border-b border-white/8 pb-3 mb-4">
+          <h2 className="page-section-title flex items-center gap-2 mb-0">
+            <ImageIcon className="h-5 w-5 text-app-accent" />
+            <span>Reference Gallery</span>
+          </h2>
+          <button
+            type="button"
+            onClick={() => handleRefreshSection("gallery")}
+            disabled={refreshingSection === "gallery"}
+            title="Re-search open-license reference media"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "gallery" ? "animate-spin text-app-accent" : ""}`} />
+            <span>Refresh Gallery</span>
+          </button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {gallery.length > 0
             ? gallery.map((asset, index) => (
               <a
@@ -424,126 +584,216 @@ export default function SpeciesDetail() {
 
       {/* Natural History Videos Section */}
       <section className="page-card rounded-[1.5rem] p-5">
-        <h2 className="page-section-title flex items-center gap-2">
-          <PlayIcon className="h-5 w-5 text-app-accent" />
-          Natural History Videos
-        </h2>
-        {videos.length > 0 ? (
-          <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.10fr)]">
-            {/* Left Column: Text info about the currently selected video */}
-            <div className="flex flex-col justify-between rounded-[1.25rem] border border-white/7 bg-black/15 p-5 min-h-[16rem]">
-              <div>
-                <span className="rounded-full border border-app-accent/20 bg-app-accent/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-app-accent">
-                  {videos[currentVideoIndex].type}
-                </span>
-                <h3 className="mt-3 text-xl font-semibold text-white">{videos[currentVideoIndex].title}</h3>
-                {(videos[currentVideoIndex].channelName || videos[currentVideoIndex].views !== undefined) && (
-                  <p className="mt-1 text-xs text-app-soft">
-                    {videos[currentVideoIndex].channelName && `Channel: ${videos[currentVideoIndex].channelName}`}
-                    {videos[currentVideoIndex].channelName && videos[currentVideoIndex].views !== undefined && " • "}
-                    {videos[currentVideoIndex].views !== undefined && `${videos[currentVideoIndex].views.toLocaleString()} views`}
-                  </p>
-                )}
-                <div className="mt-3 h-[12rem] overflow-y-auto pr-2 text-sm leading-7 text-app-muted custom-scrollbar">
-                  {videos[currentVideoIndex].description || "No description available."}
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between text-xs text-app-soft/80 border-t border-white/5 pt-3">
-                <span>Video {currentVideoIndex + 1} of {videos.length}</span>
-              </div>
+        <button
+          type="button"
+          onClick={() => setShowVideosSection((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 cursor-pointer group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/30 bg-app-accent/10">
+              <PlayIcon className="h-4.5 w-4.5 text-app-accent" />
             </div>
-
-            {/* Right Column: YouTube Embed Player */}
-            <div className="flex flex-col gap-4">
-              <div className="relative group overflow-hidden rounded-[1.25rem] border border-white/8 bg-black/35 aspect-video flex flex-col justify-center">
-                <iframe
-                  key={videos[currentVideoIndex].youtubeId}
-                  src={`https://www.youtube.com/embed/${videos[currentVideoIndex].youtubeId}?autoplay=0&mute=0`}
-                  title={videos[currentVideoIndex].title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="w-full h-full border-0"
-                />
-                {/* Nav Arrows */}
-                {videos.length > 1 && (
-                  <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none z-10">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentVideoIndex((prev) => (prev === 0 ? videos.length - 1 : prev - 1))}
-                      className="pointer-events-auto rounded-full bg-black/60 p-2 text-white border border-white/10 hover:bg-black/80 hover:text-app-accent transition cursor-pointer"
-                      title="Previous video"
-                    >
-                      <ChevronLeftIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentVideoIndex((prev) => (prev === videos.length - 1 ? 0 : prev + 1))}
-                      className="pointer-events-auto rounded-full bg-black/60 p-2 text-white border border-white/10 hover:bg-black/80 hover:text-app-accent transition cursor-pointer"
-                      title="Next video"
-                    >
-                      <ChevronRightIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              {/* Dots */}
-              {videos.length > 1 && (
-                <div className="flex justify-center gap-1.5 pb-2">
-                  {videos.map((_, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setCurrentVideoIndex(idx)}
-                      className={`h-2 rounded-full transition-all cursor-pointer ${idx === currentVideoIndex ? "w-4 bg-app-accent" : "w-2 bg-white/35"}`}
-                    />
-                  ))}
-                </div>
-              )}
-              {/* Action buttons */}
-              <div className="flex justify-center gap-3 mt-1 text-xs">
-                <button
-                  type="button"
-                  className="tag-chip interactive-chip cursor-pointer"
-                  onClick={() => {
-                    const url = videos[currentVideoIndex].url;
-                    navigator.clipboard.writeText(url)
-                      .then(() => toastService.success("Video URL copied to clipboard!"))
-                      .catch((err) => console.error("Clipboard copy failed:", err));
-                  }}
-                >
-                  Copy video link
-                </button>
-                <button
-                  type="button"
-                  className="tag-chip interactive-chip cursor-pointer"
-                  onClick={async () => {
-                    const url = videos[currentVideoIndex].url;
-                    try {
-                      await openUrl(url);
-                    } catch (err) {
-                      console.error("Failed to open URL in browser:", err);
-                      window.open(url, "_blank");
-                    }
-                  }}
-                >
-                  Open in browser
-                </button>
-              </div>
+            <div className="text-left">
+              <span className="text-sm font-semibold text-white group-hover:text-app-accent transition">
+                Natural History Videos
+              </span>
+              <p className="text-xs text-app-muted mt-0.5">
+                {showVideosSection
+                  ? "Wildlife documentary video feeds and natural history presentations"
+                  : "Click to expand and view documentary videos about this species"}
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="mt-4 rounded-[1.25rem] border border-white/7 bg-black/15 p-6 text-center">
-            <PlayIcon className="h-10 w-10 mx-auto text-app-soft/40 mb-3" />
-            <p className="text-sm font-medium text-app-text">No videos available yet</p>
-            <p className="text-sm text-app-muted mt-2 max-w-md mx-auto leading-relaxed">
-              Add a YouTube Data API key in <Link to="/settings" className="text-app-accent hover:underline">Settings</Link> to search for real wildlife videos about this species. Videos are fetched automatically when the profile is enriched.
-            </p>
-            {animal.partial && (
-              <p className="text-xs text-app-soft mt-3">Videos will load after AI enrichment completes.</p>
+          <div className={`flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-app-soft transition-transform duration-300 ${
+            showVideosSection ? "rotate-180" : ""
+          }`}>
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {showVideosSection && (
+          <div className="mt-5 border-t border-white/8 pt-5">
+            <div className="flex justify-end mb-4">
+              <button
+                type="button"
+                onClick={() => handleRefreshSection("videos")}
+                disabled={refreshingSection === "videos"}
+                title="Re-search natural history video media"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-app-soft hover:text-app-accent hover:bg-white/5 transition cursor-pointer border border-white/5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshingSection === "videos" ? "animate-spin text-app-accent" : ""}`} />
+                <span>Refresh Videos</span>
+              </button>
+            </div>
+
+            {loadingVideos ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <Loader2 className="h-8 w-8 text-app-accent animate-spin" />
+                <span className="text-sm font-medium text-app-soft">Searching natural history documentaries...</span>
+              </div>
+            ) : videos.length > 0 ? (
+              <div className="grid gap-6 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.10fr)]">
+                {/* Left Column: Text info about the currently selected video */}
+                <div className="flex flex-col justify-between rounded-[1.25rem] border border-white/7 bg-black/15 p-5 min-h-[16rem]">
+                  <div>
+                    <span className="rounded-full border border-app-accent/20 bg-app-accent/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-app-accent">
+                      {videos[currentVideoIndex].type}
+                    </span>
+                    <h3 className="mt-3 text-xl font-semibold text-white">{videos[currentVideoIndex].title}</h3>
+                    {(videos[currentVideoIndex].channelName || videos[currentVideoIndex].views !== undefined) && (
+                      <p className="mt-1 text-xs text-app-soft">
+                        {videos[currentVideoIndex].channelName && `Channel: ${videos[currentVideoIndex].channelName}`}
+                        {videos[currentVideoIndex].channelName && videos[currentVideoIndex].views !== undefined && " • "}
+                        {videos[currentVideoIndex].views !== undefined && `${videos[currentVideoIndex].views.toLocaleString()} views`}
+                      </p>
+                    )}
+                    <div className="mt-3 h-[12rem] overflow-y-auto pr-2 text-sm leading-7 text-app-muted custom-scrollbar">
+                      {videos[currentVideoIndex].description || "No description available."}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-app-soft/80 border-t border-white/5 pt-3">
+                    <span>Video {currentVideoIndex + 1} of {videos.length}</span>
+                  </div>
+                </div>
+
+                {/* Right Column: YouTube Embed Player */}
+                <div className="flex flex-col gap-4">
+                  <div className="relative group overflow-hidden rounded-[1.25rem] border border-white/8 bg-black/35 aspect-video flex flex-col justify-center">
+                    <iframe
+                      key={videos[currentVideoIndex].youtubeId}
+                      src={`https://www.youtube.com/embed/${videos[currentVideoIndex].youtubeId}?autoplay=0&mute=0`}
+                      title={videos[currentVideoIndex].title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
+                    {/* Nav Arrows */}
+                    {videos.length > 1 && (
+                      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none z-10">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentVideoIndex((prev) => (prev === 0 ? videos.length - 1 : prev - 1))}
+                          className="pointer-events-auto rounded-full bg-black/60 p-2 text-white border border-white/10 hover:bg-black/80 hover:text-app-accent transition cursor-pointer"
+                          title="Previous video"
+                        >
+                          <ChevronLeftIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentVideoIndex((prev) => (prev === videos.length - 1 ? 0 : prev + 1))}
+                          className="pointer-events-auto rounded-full bg-black/60 p-2 text-white border border-white/10 hover:bg-black/80 hover:text-app-accent transition cursor-pointer"
+                          title="Next video"
+                        >
+                          <ChevronRightIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {/* Dots */}
+                  {videos.length > 1 && (
+                    <div className="flex justify-center gap-1.5 pb-2">
+                      {videos.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setCurrentVideoIndex(idx)}
+                          className={`h-2 rounded-full transition-all cursor-pointer ${idx === currentVideoIndex ? "w-4 bg-app-accent" : "w-2 bg-white/35"}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* Action buttons */}
+                  <div className="flex justify-center gap-3 mt-1 text-xs">
+                    <button
+                      type="button"
+                      className="tag-chip interactive-chip cursor-pointer"
+                      onClick={() => {
+                        const url = videos[currentVideoIndex].url;
+                        navigator.clipboard.writeText(url)
+                          .then(() => toastService.success("Video URL copied to clipboard!"))
+                          .catch((err) => console.error("Clipboard copy failed:", err));
+                      }}
+                    >
+                      Copy video link
+                    </button>
+                    <button
+                      type="button"
+                      className="tag-chip interactive-chip cursor-pointer"
+                      onClick={async () => {
+                        const url = videos[currentVideoIndex].url;
+                        try {
+                          await openUrl(url);
+                        } catch (err) {
+                          console.error("Failed to open URL in browser:", err);
+                          window.open(url, "_blank");
+                        }
+                      }}
+                    >
+                      Open in browser
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[1.25rem] border border-white/7 bg-black/15 p-6 text-center">
+                <PlayIcon className="h-10 w-10 mx-auto text-app-soft/40 mb-3" />
+                <p className="text-sm font-medium text-app-text">No videos available yet</p>
+                <p className="text-sm text-app-muted mt-2 max-w-md mx-auto leading-relaxed">
+                  Add a YouTube Data API key in <Link to="/settings" className="text-app-accent hover:underline">Settings</Link> to search for real wildlife videos about this species. Videos are fetched automatically when the profile is enriched.
+                </p>
+                {animal.partial && (
+                  <p className="text-xs text-app-soft mt-3">Videos will load after AI enrichment completes.</p>
+                )}
+              </div>
             )}
           </div>
         )}
       </section>
+
+      {/* 3D Model Viewer — collapsible */}
+      {primaryImageUrl && (
+        <section className="page-card rounded-[1.5rem] p-5">
+          <button
+            type="button"
+            onClick={() => setShow3DSection((v) => !v)}
+            className="flex w-full items-center justify-between gap-3 cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/30 bg-app-accent/10">
+                <Box className="h-4.5 w-4.5 text-app-accent" />
+              </div>
+              <div className="text-left">
+                <span className="text-sm font-semibold text-white group-hover:text-app-accent transition">
+                  Interactive 3D Model
+                </span>
+                <p className="text-xs text-app-muted mt-0.5">
+                  {show3DSection
+                    ? "Background-removed, depth-displaced 3D scene — drag to rotate, scroll to zoom"
+                    : "Click to expand and generate a real-time 3D depth scene from the species image"}
+                </p>
+              </div>
+            </div>
+            <div className={`flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-app-soft transition-transform duration-300 ${
+              show3DSection ? "rotate-180" : ""
+            }`}>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {show3DSection && (
+            <div className="mt-5 border-t border-white/8 pt-5">
+              <SpeciesViewer3D
+                imageUrl={primaryImageUrl}
+                name={animal.commonName}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="mt-8 flex flex-col items-center gap-1.5 pb-8 text-center text-xs text-app-soft/80">
         <p>

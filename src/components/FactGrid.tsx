@@ -1,5 +1,6 @@
 import type { Animal } from "../types/animal";
-import { HourglassIcon, ScaleIcon, RulerIcon, BoxIcon } from "./icons";
+import { HourglassIcon, ScaleIcon, RulerIcon } from "./icons";
+import { Shield } from "lucide-react";
 
 export function FactGrid({ animal }: { animal: Animal }) {
   const facts = [
@@ -8,7 +9,7 @@ export function FactGrid({ animal }: { animal: Animal }) {
     { label: "Length", value: animal.size.lengthCm ? `${animal.size.lengthCm} cm` : "Unknown", icon: RulerIcon, isAi: true },
     { label: "Height", value: animal.size.heightCm ? `${animal.size.heightCm} cm` : "Unknown", icon: RulerIcon, isAi: true },
     { label: "Wingspan", value: animal.size.wingspanCm ? `${animal.size.wingspanCm} cm` : "N/A", icon: RulerIcon, isAi: true },
-    { label: "3D model", value: animal.has3DModel ? "Available locally" : "No local model attached", icon: BoxIcon, isAi: false },
+    { label: "Conservation status", value: animal.conservationStatus ?? "Least Concern", icon: Shield, isAi: true },
   ];
 
   return (

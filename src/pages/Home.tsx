@@ -5,10 +5,22 @@ import { SearchBar } from "../components/SearchBar";
 import { SpeciesImage } from "../components/SpeciesImage";
 import { animalMap, animals } from "../data/animals";
 import { ecosystems, getFeaturedEcosystemSpecies } from "../data/ecosystems";
-import { getRecentlyViewedAnimals, getBookmarkedSpecies, getFavorites, getHiddenSpecies, getAllCachedSpecies } from "../services/cache";
+import { getRecentlyViewedAnimals, getBookmarkedSpecies, getFavorites, getHiddenSpecies, getAllCachedSpecies, setCachedSpecies } from "../services/cache";
 import type { Animal } from "../types/animal";
 import { useWikipediaSummaries } from "../services/wikipedia";
 import { BookmarkSolidIcon, HeartSolidIcon, SunIcon, SparklesIcon, RefreshIcon } from "../components/icons";
+import { hydrateSpeciesProfile, hydrateSpeciesWithAI } from "../services/speciesStore";
+
+function isAnimalHydrated(animal: Animal | null | undefined): boolean {
+  if (!animal) return false;
+  if (animal.partial) return false;
+  if (!animal.coolFacts || animal.coolFacts.length === 0) return false;
+  const sDesc = animal.shortDescription?.toLowerCase() ?? "";
+  const dDesc = animal.detailedDescription?.toLowerCase() ?? "";
+  if (sDesc.includes("pending full hydration") || sDesc.includes("ready for hydration")) return false;
+  if (dDesc.includes("pending full hydration") || dDesc.includes("ready for hydration")) return false;
+  return true;
+}
 
 const quickActions = [
   ["/species", "Species Directory", "Search and filter the full local species index."],
@@ -25,6 +37,22 @@ export default function Home() {
   const [factOffset, setFactOffset] = useState(0);
   const [biomeOffset, setBiomeOffset] = useState(0);
   const [speciesOffset, setSpeciesOffset] = useState(0);
+  const [isFactHydrating, setIsFactHydrating] = useState(false);
+
+  // Track visit count in sessionStorage so every home visit displays a different fact for today's animal
+  const [visitFactCount] = useState(() => {
+    if (typeof window === "undefined" || !window.sessionStorage) return 1;
+    try {
+      const key = "biblos_home_fact_visit_count";
+      const currentStr = window.sessionStorage.getItem(key);
+      const current = currentStr ? parseInt(currentStr, 10) : 0;
+      const next = current + 1;
+      window.sessionStorage.setItem(key, next.toString());
+      return next;
+    } catch {
+      return 1;
+    }
+  });
 
   useEffect(() => {
     const handler = () => setStorageVersion((v) => v + 1);
@@ -60,7 +88,7 @@ export default function Home() {
     return allAvailableAnimals[index];
   }, [allAvailableAnimals, todayStr, dayOffset]);
 
-  // Cool Animal Fact: picks a different animal with unique facts for today (or refreshes on click)
+  // Cool Animal Fact: picks a single animal for today (or refreshes on click)
   const coolFactAnimal = useMemo(() => {
     if (allAvailableAnimals.length <= 1) return allAvailableAnimals[0] ?? animals[0];
     const factSeed = todayStr + "-cool-fact-seed";
@@ -69,22 +97,66 @@ export default function Home() {
       hash = (hash << 5) - hash + factSeed.charCodeAt(i);
       hash |= 0;
     }
-    const candidates = allAvailableAnimals.filter(
-      (a) => a.id !== animalOfDay.id && (a.coolFacts.length > 0 || a.detailedDescription.length > 40)
-    );
-    const pool = candidates.length > 0 ? candidates : allAvailableAnimals.filter((a) => a.id !== animalOfDay.id);
-    const index = Math.abs(hash + factOffset) % pool.length;
-    return pool[index];
+    const pool = allAvailableAnimals.filter((a) => a.id !== animalOfDay?.id);
+    const candidatePool = pool.length > 0 ? pool : allAvailableAnimals;
+    const index = Math.abs(hash + factOffset) % candidatePool.length;
+    return candidatePool[index];
   }, [allAvailableAnimals, animalOfDay, todayStr, factOffset]);
+
+  // Ensure the selected coolFactAnimal is hydrated directly before showing
+  useEffect(() => {
+    if (!coolFactAnimal) return;
+    if (isAnimalHydrated(coolFactAnimal)) {
+      setIsFactHydrating(false);
+      return;
+    }
+
+    let active = true;
+    setIsFactHydrating(true);
+
+    async function hydrateSelectedAnimal() {
+      try {
+        const res = await hydrateSpeciesProfile(coolFactAnimal.id);
+        let current = res.animal;
+
+        if (!isAnimalHydrated(current)) {
+          try {
+            current = await hydrateSpeciesWithAI(current);
+          } catch (aiErr) {
+            console.error("[Home] AI hydration failed for cool fact animal", aiErr);
+          }
+        }
+
+        if (active) {
+          setCachedSpecies(current);
+        }
+      } catch (err) {
+        console.error("[Home] Failed to hydrate cool fact animal", err);
+      } finally {
+        if (active) {
+          setIsFactHydrating(false);
+        }
+      }
+    }
+
+    hydrateSelectedAnimal();
+
+    return () => {
+      active = false;
+    };
+  }, [coolFactAnimal?.id, coolFactAnimal?.partial, coolFactAnimal?.coolFacts?.length]);
 
   const coolFact = useMemo(() => {
     if (!coolFactAnimal) return "";
     if (coolFactAnimal.coolFacts && coolFactAnimal.coolFacts.length > 0) {
-      const factIndex = Math.abs(todayStr.length + factOffset) % coolFactAnimal.coolFacts.length;
+      const factIndex = (visitFactCount - 1) % coolFactAnimal.coolFacts.length;
       return coolFactAnimal.coolFacts[factIndex];
     }
-    return coolFactAnimal.shortDescription || coolFactAnimal.detailedDescription;
-  }, [coolFactAnimal, todayStr, factOffset]);
+    if (!coolFactAnimal.shortDescription?.toLowerCase().includes("pending full hydration")) {
+      return coolFactAnimal.shortDescription || coolFactAnimal.detailedDescription;
+    }
+    return "";
+  }, [coolFactAnimal, visitFactCount]);
 
   const recentlyViewed = useMemo(() => {
     return getRecentlyViewedAnimals()
@@ -251,10 +323,17 @@ export default function Home() {
             <h3 className="mt-4 text-xl font-semibold text-white">{coolFactAnimal.commonName}</h3>
             <p className="mt-0.5 italic text-app-muted text-xs">{coolFactAnimal.scientificName}</p>
             
-            <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft">
-              <span className="font-semibold text-app-accent block mb-1">Did you know?</span>
-              "{coolFact}"
-            </div>
+            {isFactHydrating || !isAnimalHydrated(coolFactAnimal) ? (
+              <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft flex items-center gap-3">
+                <RefreshIcon className="h-4 w-4 animate-spin text-app-accent flex-shrink-0" />
+                <span>Hydrating species facts for {coolFactAnimal.commonName}...</span>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft">
+                <span className="font-semibold text-app-accent block mb-1">Did you know?</span>
+                "{coolFact}"
+              </div>
+            )}
           </div>
           <div className="mt-5">
             <Link to={`/species/${coolFactAnimal.id}`} className="ghost-button text-sm w-full flex items-center justify-center gap-2">

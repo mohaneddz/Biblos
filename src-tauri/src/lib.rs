@@ -177,6 +177,28 @@ async fn ask_ai_naturalist(
         .ok_or_else(|| "Groq returned an empty response.".to_string())
 }
 
+#[tauri::command]
+async fn fetch_image_base64(url: String) -> Result<String, String> {
+    use base64::Engine;
+    let client = Client::builder()
+        .user_agent("Biblos/0.1 (Desktop)")
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|error| error.to_string())?;
+
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("image/jpeg")
+        .to_string();
+
+    let bytes = resp.bytes().await.map_err(|error| error.to_string())?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", content_type, b64))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -194,7 +216,8 @@ pub fn run() {
             get_cached_species_profiles,
             search_inat_autocomplete,
             parse_query_to_filters,
-            ask_ai_naturalist
+            ask_ai_naturalist,
+            fetch_image_base64
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -340,3 +340,46 @@ export function getFeaturedEcosystemSpecies(ecosystem: Ecosystem) {
 export function ecosystemsForContinent(continent: Continent) {
   return ecosystems.filter((ecosystem) => ecosystem.continents.includes(continent));
 }
+
+export function findMatchingEcosystem(animal: { id: string; habitat: string[]; continents: Continent[] }): Ecosystem {
+  // 1. Direct match by featured species ID
+  const directMatch = ecosystems.find((e) => e.featuredSpeciesIds.includes(animal.id));
+  if (directMatch) return directMatch;
+
+  // 2. Score by habitat and continent overlap
+  let bestEcosystem = ecosystems[0];
+  let maxScore = -1;
+
+  const animalHabitats = (animal.habitat || []).map((h) => h.toLowerCase());
+  const animalContinents = new Set(animal.continents || []);
+
+  for (const eco of ecosystems) {
+    let score = 0;
+
+    // Habitat filter matches
+    for (const hFilter of eco.habitatFilters) {
+      const lowerFilter = hFilter.toLowerCase();
+      for (const ah of animalHabitats) {
+        if (ah === lowerFilter) {
+          score += 4;
+        } else if (ah.includes(lowerFilter) || lowerFilter.includes(ah)) {
+          score += 2;
+        }
+      }
+    }
+
+    // Continent overlap matches
+    for (const c of eco.continents) {
+      if (animalContinents.has(c)) {
+        score += 1.5;
+      }
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestEcosystem = eco;
+    }
+  }
+
+  return bestEcosystem;
+}
