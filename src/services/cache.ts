@@ -7,6 +7,19 @@ const BOOKMARKS_KEY = "biblos.bookmarks";
 const FOLDERS_KEY = "biblos.folders";
 const SETTINGS_KEY = "biblos.settings";
 const SPECIES_PREFIX = "biblos.species.";
+const SECTION_STATES_KEY = "biblos.section_states";
+
+export interface SectionStates {
+  gallery: boolean;
+  videos: boolean;
+  model3d: boolean;
+}
+
+const defaultSectionStates: SectionStates = {
+  gallery: true,
+  videos: false,
+  model3d: false,
+};
 
 const defaultSettings: AppSettings = {
   dataMode: "mock",
@@ -318,3 +331,15 @@ export function updateSettings(partial: Partial<AppSettings>) {
   writeJson(SETTINGS_KEY, next);
   return next;
 }
+
+export function getSectionStates(): SectionStates {
+  return readJson<SectionStates>(SECTION_STATES_KEY, defaultSectionStates);
+}
+
+export function saveSectionStates(partial: Partial<SectionStates>): SectionStates {
+  const current = getSectionStates();
+  const next = { ...current, ...partial };
+  writeJson(SECTION_STATES_KEY, next);
+  return next;
+}
+

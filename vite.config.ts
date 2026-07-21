@@ -1,19 +1,16 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
+import react from '@tailwindcss/vite';
+import reactPlugin from '@vitejs/plugin-react';
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
-	plugins: [tailwindcss(), react()],
+	plugins: [react(), reactPlugin()],
 
 	// Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-	//
-	// 1. prevent vite from obscuring rust errors
 	clearScreen: false,
-	// 2. tauri expects a fixed port, fail if that port is not available
 	server: {
 		port: 8668,
 		strictPort: true,
@@ -26,11 +23,10 @@ export default defineConfig(async () => ({
 			  }
 			: undefined,
 		watch: {
-			// 3. tell vite to ignore watching `src-tauri`
 			ignored: ['**/src-tauri/**'],
 		},
 	},
 	optimizeDeps: {
-		exclude: ['@imgly/background-removal'],
+		exclude: ['@imgly/background-removal', 'onnxruntime-web'],
 	},
 }));
