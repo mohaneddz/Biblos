@@ -11,11 +11,12 @@ import {
   hideSpecies,
   getCachedSpecies,
 } from "../services/cache";
-import { BookmarkSolidIcon, HeartSolidIcon, HeartIcon, BookmarkIcon } from "./icons";
+import { BookmarkSolidIcon, HeartSolidIcon, HeartIcon, BookmarkIcon, FolderIcon } from "./icons";
 import { toastService } from "../services/toastService";
 import { confirmService } from "../services/confirmService";
 import { hydrateSpeciesWithAI } from "../services/speciesStore";
 import { reportError } from "../services/errorReporter";
+import { AddToFolderModal } from "./AddToFolderModal";
 
 type AnimalCardProps = {
   animal: Animal;
@@ -26,6 +27,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
   const isBookmarked = getBookmarkedSpecies().includes(animal.id);
   const isCached = animal.id.startsWith("gbif-") || getCachedSpecies(animal.id) !== null;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -263,6 +265,17 @@ export function AnimalCard({ animal }: AnimalCardProps) {
                 </>
               )}
             </button>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={() => {
+                setMenuPos(null);
+                setIsFolderModalOpen(true);
+              }}
+            >
+              <FolderIcon className="h-4 w-4 text-app-accent" />
+              <span>Organize in Folders...</span>
+            </button>
 
             <hr className="my-1 border-t border-white/10" />
 
@@ -355,6 +368,12 @@ export function AnimalCard({ animal }: AnimalCardProps) {
           </div>
         </>
       )}
+
+      <AddToFolderModal
+        animal={animal}
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+      />
     </>
   );
 }
