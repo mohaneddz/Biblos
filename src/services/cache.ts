@@ -1,9 +1,10 @@
 import { animalMap } from "../data/animals";
-import type { Animal, AppSettings } from "../types/animal";
+import type { Animal, AppSettings, Folder } from "../types/animal";
 
 const FAVORITES_KEY = "biblos.favorites";
 const RECENTS_KEY = "biblos.recent";
 const BOOKMARKS_KEY = "biblos.bookmarks";
+const FOLDERS_KEY = "biblos.folders";
 const SETTINGS_KEY = "biblos.settings";
 const SPECIES_PREFIX = "biblos.species.";
 
@@ -98,6 +99,94 @@ export function getRecentlyViewedAnimals() {
     .filter((animal): animal is Animal => Boolean(animal));
 }
 
+export function clearRecentlyViewed() {
+  writeJson(RECENTS_KEY, []);
+  notifyCacheUpdated();
+}
+
+// --- Folder Management ---
+export function getFolders(): Folder[] {
+  return readJson<Folder[]>(FOLDERS_KEY, []);
+}
+
+export function saveFolders(folders: Folder[]) {
+  writeJson(FOLDERS_KEY, folders);
+  notifyCacheUpdated();
+}
+
+export function createFolder(name: string, description?: string, icon = "folder"): Folder {
+  const newFolder: Folder = {
+    id: `folder_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    name: name.trim(),
+    description: description?.trim() || "",
+    icon,
+    animalIds: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  const folders = getFolders();
+  saveFolders([newFolder, ...folders]);
+  return newFolder;
+}
+
+export function updateFolder(id: string, updates: Partial<Omit<Folder, "id" | "createdAt">>): Folder | null {
+  const folders = getFolders();
+  const index = folders.findIndex((f) => f.id === id);
+  if (index === -1) return null;
+  const updated: Folder = {
+    ...folders[index],
+    ...updates,
+    updatedAt: Date.now(),
+  };
+  folders[index] = updated;
+  saveFolders(folders);
+  return updated;
+}
+
+export function deleteFolder(id: string) {
+  const folders = getFolders().filter((f) => f.id !== id);
+  saveFolders(folders);
+}
+
+export function addAnimalToFolder(folderId: string, animalId: string) {
+  const folders = getFolders();
+  const index = folders.findIndex((f) => f.id === folderId);
+  if (index === -1) return;
+  if (!folders[index].animalIds.includes(animalId)) {
+    folders[index].animalIds.push(animalId);
+    folders[index].updatedAt = Date.now();
+    saveFolders(folders);
+  }
+}
+
+export function removeAnimalFromFolder(folderId: string, animalId: string) {
+  const folders = getFolders();
+  const index = folders.findIndex((f) => f.id === folderId);
+  if (index === -1) return;
+  folders[index].animalIds = folders[index].animalIds.filter((id) => id !== animalId);
+  folders[index].updatedAt = Date.now();
+  saveFolders(folders);
+}
+
+export function toggleAnimalInFolder(folderId: string, animalId: string) {
+  const folders = getFolders();
+  const index = folders.findIndex((f) => f.id === folderId);
+  if (index === -1) return;
+  const hasAnimal = folders[index].animalIds.includes(animalId);
+  if (hasAnimal) {
+    folders[index].animalIds = folders[index].animalIds.filter((id) => id !== animalId);
+  } else {
+    folders[index].animalIds.push(animalId);
+  }
+  folders[index].updatedAt = Date.now();
+  saveFolders(folders);
+}
+
+export function getFoldersForAnimal(animalId: string): Folder[] {
+  return getFolders().filter((f) => f.animalIds.includes(animalId));
+}
+
+
 export function getCachedSpecies(id: string) {
   return readJson<Animal | null>(`${SPECIES_PREFIX}${id}`, null);
 }
@@ -185,6 +274,7 @@ export function clearLibraryData() {
   window.localStorage.removeItem(FAVORITES_KEY);
   window.localStorage.removeItem(RECENTS_KEY);
   window.localStorage.removeItem(BOOKMARKS_KEY);
+  window.localStorage.removeItem(FOLDERS_KEY);
   notifyCacheUpdated();
 }
 
