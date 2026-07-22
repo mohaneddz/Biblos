@@ -38,6 +38,18 @@ Biblos is a Tauri desktop application for exploring species, ecosystems, taxonom
 
 ---
 
+<img src="screenshots/explorer.png" alt="Biblos explorer view" width="88%"/>
+
+**Explorer:** Browse curated life data through the interactive discovery workspace.
+
+---
+
+<img src="screenshots/tree-of-life.png" alt="Biblos tree of life view" width="88%"/>
+
+**Tree of Life:** Navigate taxonomy through a dedicated classification view.
+
+---
+
 ## Project Structure
 
 ```text
@@ -94,3 +106,23 @@ npm run preview      # Preview the production frontend build
 npm run tauri dev    # Run the desktop app
 npm run seed:index   # Run the Biblos Rust index seeder
 ```
+
+---
+
+## Exploration Modes
+
+- **Species:** Search the directory and open detailed species records.
+- **Explorer:** Browse discovery data and filter the natural world by topic.
+- **Tree of Life:** Follow classification relationships from broad groups to individual species.
+- **Ecosystems:** Explore ecosystem records and their species context.
+- **Compare:** Place species side by side for a focused comparison.
+- **Collection:** Save records into personal folders.
+
+---
+
+## Data and Media Notes
+
+- Curated data is bundled under `src/data` so the core experience is immediately explorable.
+- Service modules provide optional live species, taxonomy, media, and video enrichment.
+- The app includes caching, error reporting, confirmation, and toast services to support long-running exploration workflows.
+- Some advanced features, such as 3D viewing and AI Naturalist tools, rely on their respective frontend service modules and available external providers.
