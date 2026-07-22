@@ -12,13 +12,11 @@ const SECTION_STATES_KEY = "biblos.section_states";
 export interface SectionStates {
   gallery: boolean;
   videos: boolean;
-  model3d: boolean;
 }
 
 const defaultSectionStates: SectionStates = {
   gallery: true,
   videos: false,
-  model3d: false,
 };
 
 const defaultSettings: AppSettings = {
@@ -342,4 +340,3 @@ export function saveSectionStates(partial: Partial<SectionStates>): SectionState
   writeJson(SECTION_STATES_KEY, next);
   return next;
 }
-

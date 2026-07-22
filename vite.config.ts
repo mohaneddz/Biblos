@@ -26,7 +26,4 @@ export default defineConfig(async () => ({
 			ignored: ['**/src-tauri/**'],
 		},
 	},
-	optimizeDeps: {
-		exclude: ['@imgly/background-removal', 'onnxruntime-web'],
-	},
 }));
