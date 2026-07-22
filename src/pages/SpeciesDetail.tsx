@@ -30,8 +30,7 @@ import {
   FolderIcon,
 } from "../components/icons";
 import { AddToFolderModal } from "../components/AddToFolderModal";
-import { SpeciesViewer3D } from "../components/SpeciesViewer3D";
-import { RefreshCw, Box, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2 } from "lucide-react";
 
 function hasUnknownClassification(animal: Animal | null): boolean {
   if (!animal || !animal.classification) return true;
@@ -156,7 +155,6 @@ export default function SpeciesDetail() {
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const initialSections = getSectionStates();
   const [showGallerySection, setShowGallerySection] = useState(() => initialSections.gallery);
-  const [show3DSection, setShow3DSection] = useState(() => initialSections.model3d);
   const [showVideosSection, setShowVideosSection] = useState(() => initialSections.videos);
 
   const toggleGallerySection = () => {
@@ -175,17 +173,9 @@ export default function SpeciesDetail() {
     });
   };
 
-  const toggle3DSection = () => {
-    setShow3DSection((prev) => {
-      const next = !prev;
-      saveSectionStates({ model3d: next });
-      return next;
-    });
-  };
-
   const [refreshingSection, setRefreshingSection] = useState<string | null>(null);
   const [, setMediaVersion] = useState(0);
-  const { gallery, primaryImage } = useSpeciesMedia(animal, "full");
+  const { gallery } = useSpeciesMedia(animal, "full");
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [localVideos, setLocalVideos] = useState<SpeciesVideo[]>(() => animal?.videos ?? []);
   const [loadingVideos, setLoadingVideos] = useState(false);
@@ -221,12 +211,6 @@ export default function SpeciesDetail() {
   const primaryEcosystem = useMemo(() => {
     return animal ? findMatchingEcosystem(animal) : null;
   }, [animal]);
-
-  // Resolve the best available image URL for the 3D viewer
-  const primaryImageUrl = useMemo(() => {
-    if (!animal) return null;
-    return animal.heroImage ?? animal.images?.[0] ?? primaryImage?.url ?? null;
-  }, [animal, primaryImage]);
 
   async function handleRefreshSection(sectionName: string) {
     if (!animal) return;
@@ -808,49 +792,6 @@ export default function SpeciesDetail() {
           </div>
         )}
       </section>
-
-      {/* 3D Model Viewer — collapsible */}
-      {primaryImageUrl && (
-        <section className="page-card rounded-[1.5rem] p-5">
-          <button
-            type="button"
-            onClick={toggle3DSection}
-            className="flex w-full items-center justify-between gap-3 cursor-pointer group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/30 bg-app-accent/10">
-                <Box className="h-4.5 w-4.5 text-app-accent" />
-              </div>
-              <div className="text-left">
-                <span className="text-sm font-semibold text-white group-hover:text-app-accent transition">
-                  Interactive 3D Model
-                </span>
-                <p className="text-xs text-app-muted mt-0.5">
-                  {show3DSection
-                    ? "Background-removed, depth-displaced 3D scene — drag to rotate, scroll to zoom"
-                    : "Click to expand and generate a real-time 3D depth scene from the species image"}
-                </p>
-              </div>
-            </div>
-            <div className={`flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-app-soft transition-transform duration-300 ${
-              show3DSection ? "rotate-180" : ""
-            }`}>
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-              </svg>
-            </div>
-          </button>
-
-          {show3DSection && (
-            <div className="mt-5 border-t border-white/8 pt-5">
-              <SpeciesViewer3D
-                imageUrl={primaryImageUrl}
-                name={animal.commonName}
-              />
-            </div>
-          )}
-        </section>
-      )}
 
       <div className="mt-8 flex flex-col items-center gap-1.5 pb-8 text-center text-xs text-app-soft/80">
         <p>
