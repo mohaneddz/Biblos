@@ -46,15 +46,39 @@ export function normalizeSearchText(value: string) {
     .trim();
 }
 
-export function preferredCommonName(item: GbifSearchItem) {
-  if (item.vernacularName?.trim()) {
+/** Check if text consists of Latin/English letters, digits, and common punctuation (rejects Japanese, Thai, Cyrillic, Chinese, etc.) */
+export function isLatinText(text: string | null | undefined): boolean {
+  if (!text || !text.trim()) return false;
+  return !/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf\u0e00-\u0e7f\u0400-\u04ff\u0600-\u06ff\uac00-\ud7af]/u.test(text);
+}
+
+export function preferredCommonName(item: GbifSearchItem): string | null {
+  // 1. Prefer explicit English vernacular names
+  const engEntry = item.vernacularNames?.find(
+    (entry) =>
+      (entry.language?.toLowerCase() === "eng" || entry.language?.toLowerCase() === "en") &&
+      entry.vernacularName?.trim() &&
+      isLatinText(entry.vernacularName)
+  );
+  if (engEntry?.vernacularName?.trim()) {
+    return engEntry.vernacularName.trim();
+  }
+
+  // 2. Top-level vernacularName if it is valid English/Latin text
+  if (item.vernacularName?.trim() && isLatinText(item.vernacularName)) {
     return item.vernacularName.trim();
   }
-  return (
-    item.vernacularNames?.find((entry) => entry.language?.toLowerCase() === "eng" && entry.vernacularName?.trim())?.vernacularName?.trim() ??
-    item.vernacularNames?.find((entry) => entry.vernacularName?.trim())?.vernacularName?.trim() ??
-    null
+
+  // 3. Any vernacularName entry that is valid English/Latin text
+  const anyLatinEntry = item.vernacularNames?.find(
+    (entry) => entry.vernacularName?.trim() && isLatinText(entry.vernacularName)
   );
+  if (anyLatinEntry?.vernacularName?.trim()) {
+    return anyLatinEntry.vernacularName.trim();
+  }
+
+  // Return null if all vernacular names are foreign non-Latin scripts
+  return null;
 }
 
 export function toSearchHitFromGbif(item: GbifSearchItem, index = 0, query = ""): SpeciesSearchHit | null {

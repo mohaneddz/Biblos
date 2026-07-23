@@ -130,6 +130,8 @@ function mockSearch(query: string) {
   return { hits, used_live_fallback: false, total_count: hits.length } satisfies SearchResponse;
 }
 
+import { isLatinText } from "./gbifService";
+
 export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
   const inferredClass = inferClassFromHit(hit);
   const inferredHabitat = hit.habitat ? [hit.habitat] : [inferHabitatFromHit(hit)];
@@ -138,10 +140,13 @@ export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
   const inferredContinents = hit.continents ? [hit.continents as Continent] : inferContinentsFromHit(hit);
   const inferredStatus = (hit.conservation_status as Animal["conservationStatus"]) ?? inferConservationStatusFromHit(hit);
 
+  const rawCommon = hit.common_name?.trim();
+  const validCommonName = rawCommon && isLatinText(rawCommon) ? rawCommon : (hit.canonical_name || hit.scientific_name);
+
   return {
     id: hit.id,
     gbifTaxonKey: hit.gbif_taxon_key,
-    commonName: hit.common_name ?? hit.canonical_name,
+    commonName: validCommonName,
     scientificName: hit.scientific_name,
     averageLifespanYears: null,
     shortDescription: [hit.rank, inferredClass, hit.family].filter(Boolean).join(" | ") || "Indexed species entry ready for hydration.",

@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import Species from "./pages/Species";
 import SpeciesDetail from "./pages/SpeciesDetail";
 import TreeOfLife from "./pages/TreeOfLife";
+import TraitDetail from "./pages/TraitDetail";
 
 function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -69,6 +70,9 @@ export default function App() {
         <Route path="/tree" element={<TreeOfLife />} />
         <Route path="/life-class/:id" element={<LifeClass />} />
         <Route path="/explorer" element={<Explorer />} />
+        <Route path="/explore/diet/:value" element={<TraitDetail traitCategory="diet" />} />
+        <Route path="/explore/status/:value" element={<TraitDetail traitCategory="status" />} />
+        <Route path="/explore/activity/:value" element={<TraitDetail traitCategory="activity" />} />
         <Route path="/ecosystems" element={<Ecosystems />} />
         <Route path="/ecosystems/:id" element={<EcosystemDetail />} />
         <Route path="/ai" element={<AiNaturalist />} />
