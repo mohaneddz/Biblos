@@ -50,7 +50,7 @@ This document lists all the curated high-definition photography image URLs used 
 | **`herbivore`** | **Herbivore** (Giraffe grazer) | `https://images.unsplash.com/photo-1547721064-da6cfb341d50?auto=format&fit=crop&w=800&q=80` |
 | **`omnivore`** | **Omnivore** (Bear omnivore) | `https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=800&q=80` |
 | **`insectivore`** | **Insectivore** (Chameleon) | `https://images.unsplash.com/photo-1531386151447-fd76ad50012f?auto=format&fit=crop&w=800&q=80` |
-| **`piscivore`** | **Piscivore** (Osprey fish hunter) | `https://images.unsplash.com/photo-1516683011827-46882a229ad5?auto=format&fit=crop&w=800&q=80` |
+| **`piscivore`** | **Piscivore** (Kingfisher catching fish underwater) | `https://images.unsplash.com/photo-1551085254-e96b210df58a?auto=format&fit=crop&w=1200&q=80` |
 | **`filter feeder`** | **Filter Feeder** (Whale shark) | `https://images.unsplash.com/photo-1560275619-4662e36fa65c?auto=format&fit=crop&w=800&q=80` |
 | **`detritivore`** | **Detritivore** (Soil & benthic recycler) | `https://images.unsplash.com/photo-1535591273668-578e31182c4f?auto=format&fit=crop&w=800&q=80` |
 | **`autotroph`** | **Autotroph** (Photosynthetic flora) | `https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80` |
@@ -66,7 +66,7 @@ This document lists all the curated high-definition photography image URLs used 
 | **`vulnerable`** | **Vulnerable** (Elephant) | `https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=800&q=80` |
 | **`near threatened`** | **Near Threatened** (Red Panda) | `https://images.unsplash.com/photo-1543946207-39bd91e70ca7?auto=format&fit=crop&w=800&q=80` |
 | **`least concern`** | **Least Concern** (Red Fox) | `https://images.unsplash.com/photo-1474511320723-9a56873867b5?auto=format&fit=crop&w=800&q=80` |
-| **`extinct`** | **Extinct** (Thylacine / fossil record) | `https://images.unsplash.com/photo-1569742918414-0498b584d412?auto=format&fit=crop&w=800&q=80` |
+| **`extinct`** | **Extinct** (Prehistoric museum fossil specimen) | `https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80` |
 
 ---
 

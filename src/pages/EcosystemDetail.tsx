@@ -80,7 +80,7 @@ function EcosystemHeatmap({ ecosystem }: { ecosystem: Ecosystem }) {
       {/* Legend */}
       <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 text-[10px] text-white/50">
         <span className="inline-block h-2.5 w-5 rounded-sm" style={{ background: "rgba(74,222,128,0.85)" }} /> Present
-        <span className="inline-block h-2.5 w-5 rounded-sm ml-2" style={{ background: "#1b2d25" }} /> Absent
+        <span className="inline-block h-2.5 w-5 rounded-sm ml-2" style={{ background: "#141b17" }} /> Absent
       </div>
 
       <ComposableMap
@@ -102,8 +102,8 @@ function EcosystemHeatmap({ ecosystem }: { ecosystem: Ecosystem }) {
                 const relevance = getContinentRelevance(numericId, ecosystem.continents);
                 const fill = relevance > 0
                   ? "rgba(74, 222, 128, 0.85)"
-                  : "#1b2d25";
-                const stroke = relevance > 0 ? "rgba(74,222,128,0.25)" : "#0f1e17";
+                  : "#141b17";
+                const stroke = relevance > 0 ? "rgba(74,222,128,0.25)" : "rgba(255,255,255,0.06)";
                 return (
                   <Geography
                     key={geo.rsmKey}

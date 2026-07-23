@@ -132,10 +132,10 @@ function DistributionMap({ continents }: { continents: string[] }) {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill={present ? "rgba(221,191,135,0.82)" : "#1b2d25"}
-                  stroke={present ? "rgba(221,191,135,0.28)" : "#0f1e17"}
+                  fill={present ? "rgba(221,191,135,0.82)" : "#141b17"}
+                  stroke={present ? "rgba(221,191,135,0.28)" : "rgba(255,255,255,0.06)"}
                   strokeWidth={0.4}
-                  style={{ default: { outline: "none" }, hover: { outline: "none", fill: present ? "rgba(240,211,156,0.98)" : "#253d30", cursor: "pointer" }, pressed: { outline: "none" } }}
+                  style={{ default: { outline: "none" }, hover: { outline: "none", fill: present ? "rgba(240,211,156,0.98)" : "#1e2823", cursor: "pointer" }, pressed: { outline: "none" } }}
                   onMouseEnter={(event: MouseEvent) => setTooltip({ name: geo.properties.name, x: event.clientX, y: event.clientY })}
                   onMouseMove={(event: MouseEvent) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : null)}
                   onMouseLeave={() => setTooltip(null)}
@@ -370,6 +370,23 @@ export default function LifeClass() {
               >
                 Wikipedia ↗
               </a>
+            ) : null}
+            {coverData.attribution ? (
+              coverData.sourceUrl ? (
+                <a
+                  href={coverData.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ghost-button !min-h-0 !py-1 !px-3 text-xs text-app-soft opacity-80 hover:opacity-100 cursor-pointer backdrop-blur-md"
+                  title={coverData.attribution}
+                >
+                  📷 {coverData.attribution.length > 45 ? coverData.attribution.slice(0, 42) + "..." : coverData.attribution} ↗
+                </a>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-app-soft backdrop-blur-md">
+                  📷 {coverData.attribution}
+                </span>
+              )
             ) : null}
           </div>
 
