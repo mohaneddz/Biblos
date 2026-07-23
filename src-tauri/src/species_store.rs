@@ -30,6 +30,11 @@ pub struct SpeciesSearchHit {
     pub order_name: Option<String>,
     pub family: Option<String>,
     pub genus: Option<String>,
+    pub habitat: Option<String>,
+    pub diet: Option<String>,
+    pub activity_pattern: Option<String>,
+    pub conservation_status: Option<String>,
+    pub continents: Option<String>,
     /// Alternate vernacular names / synonyms (populated from iNaturalist or GBIF vernacularNames)
     pub aliases: Vec<String>,
     /// iNaturalist taxon ID — None when the hit was not sourced from iNaturalist
@@ -237,6 +242,11 @@ struct IndexRecord {
     order_name: Option<String>,
     family: Option<String>,
     genus: Option<String>,
+    habitat: Option<String>,
+    diet: Option<String>,
+    activity_pattern: Option<String>,
+    conservation_status: Option<String>,
+    continents: Option<String>,
     source: String,
     updated_at: String,
 }
@@ -544,6 +554,11 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
         order_name: row.get("order_name")?,
         family: row.get("family")?,
         genus: row.get("genus")?,
+        habitat: row.get("habitat").unwrap_or(None),
+        diet: row.get("diet").unwrap_or(None),
+        activity_pattern: row.get("activity_pattern").unwrap_or(None),
+        conservation_status: row.get("conservation_status").unwrap_or(None),
+        continents: row.get("continents").unwrap_or(None),
         source: row.get("source")?,
         updated_at: row.get("updated_at")?,
     })
@@ -566,6 +581,11 @@ fn to_search_hit(record: IndexRecord, score: f64, match_reason: String, is_live_
         order_name: record.order_name,
         family: record.family,
         genus: record.genus,
+        habitat: record.habitat,
+        diet: record.diet,
+        activity_pattern: record.activity_pattern,
+        conservation_status: record.conservation_status,
+        continents: record.continents,
         source: record.source,
         updated_at: record.updated_at,
         score,
@@ -633,8 +653,9 @@ fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result
         "
         INSERT INTO species_index (
           id, gbif_taxon_key, scientific_name, canonical_name, common_name, aliases,
-          inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+          inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus,
+          habitat, diet, activity_pattern, conservation_status, continents, source, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
         ON CONFLICT(gbif_taxon_key) DO UPDATE SET
           id = excluded.id,
           scientific_name = excluded.scientific_name,
@@ -650,6 +671,11 @@ fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result
           order_name = excluded.order_name,
           family = excluded.family,
           genus = excluded.genus,
+          habitat = coalesce(excluded.habitat, species_index.habitat),
+          diet = coalesce(excluded.diet, species_index.diet),
+          activity_pattern = coalesce(excluded.activity_pattern, species_index.activity_pattern),
+          conservation_status = coalesce(excluded.conservation_status, species_index.conservation_status),
+          continents = coalesce(excluded.continents, species_index.continents),
           source = excluded.source,
           updated_at = excluded.updated_at
         ",
@@ -669,6 +695,11 @@ fn upsert_species_index(connection: &Connection, record: &IndexRecord) -> Result
             record.order_name,
             record.family,
             record.genus,
+            record.habitat,
+            record.diet,
+            record.activity_pattern,
+            record.conservation_status,
+            record.continents,
             record.source,
             record.updated_at,
         ],
@@ -709,6 +740,11 @@ fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>
         order_name: item.order.clone(),
         family: item.family.clone(),
         genus: item.genus.clone(),
+        habitat: None,
+        diet: None,
+        activity_pattern: None,
+        conservation_status: None,
+        continents: None,
         source: "GBIF".into(),
         updated_at: Utc::now().to_rfc3339(),
     })
@@ -726,10 +762,75 @@ fn preferred_common_name(item: &GbifSpeciesSearchItem) -> Option<String> {
         .or_else(|| item.vernacular_names.iter().find_map(|entry| entry.vernacular_name.clone()))
 }
 
+async fn seed_priority_class(
+    client: &Client,
+    db_path: PathBuf,
+    seen: &mut HashSet<i64>,
+    inserted: &mut usize,
+    limit: usize,
+    taxon_key: i64,
+    class_name: &str,
+    quota: usize,
+) -> Result<()> {
+    let mut offset = 0usize;
+    let mut class_inserted = 0usize;
+
+    while *inserted < limit && class_inserted < quota {
+        let batch_limit = SEED_PAGE_SIZE.min(quota - class_inserted);
+        let url = format!(
+            "https://api.gbif.org/v1/species/search?highertaxon_key={taxon_key}&rank=SPECIES&status=ACCEPTED&limit={batch_limit}&offset={offset}"
+        );
+        let response = match get_with_retry(client, &url).await {
+            Ok(response) if response.status().is_success() => response,
+            _ => break,
+        };
+        let payload: GbifSearchResponse = match response.json().await {
+            Ok(payload) => payload,
+            Err(_) => break,
+        };
+        if payload.results.is_empty() {
+            break;
+        }
+
+        let fetched_count = payload.results.len();
+        let connection = open_connection(&db_path)?;
+        for item in payload.results {
+            if *inserted >= limit || class_inserted >= quota {
+                break;
+            }
+            let Some(gbif_taxon_key) = item.accepted_taxon_key.or(item.taxon_key).or(item.key) else {
+                continue;
+            };
+            if !seen.insert(gbif_taxon_key) {
+                continue;
+            }
+            let Some(common_name) = preferred_common_name(&item) else {
+                continue;
+            };
+            let Some(record) = gbif_item_to_record(&item, Some(common_name)) else {
+                continue;
+            };
+            if upsert_species_index(&connection, &record).is_ok() {
+                *inserted += 1;
+                class_inserted += 1;
+                if *inserted % 25 == 0 || *inserted >= limit {
+                    println!("--> Priority class {class_name}: indexed {}/{}", *inserted, limit);
+                }
+            }
+        }
+        offset += fetched_count;
+    }
+
+    Ok(())
+}
+
 pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> {
     let path = initialize_database(app)?;
     let connection = open_connection(&path)?;
-    let client = Client::builder().user_agent("Biblos/0.1 (contact@biblos.app)").build()?;
+    let client = Client::builder()
+        .user_agent("Biblos/0.1 (contact@biblos.app)")
+        .timeout(std::time::Duration::from_secs(20))
+        .build()?;
     let mut seen = HashSet::new();
     let mut inserted: usize;
 
@@ -747,6 +848,47 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
         if inserted >= limit {
             return Ok(inserted);
         }
+    }
+
+    // Prioritize low-coverage classes before the broad animal seed. These are
+    // real GBIF classes under sparsely represented branches of the life tree.
+    // Reptilia is represented by its accepted GBIF child classes (Squamata,
+    // Testudines, and Crocodylia), since GBIF treats Reptilia as a higher clade.
+    let priority_classes: &[(i64, &str)] = &[
+        (11592253, "Squamata"),
+        (11418114, "Testudines"),
+        (11493978, "Crocodylia"),
+        (136, "Cephalopoda"),
+        (131, "Amphibia"),
+        (137, "Bivalvia"),
+        (206, "Anthozoa"),
+        (214, "Asteroidea"),
+        (205, "Hydrozoa"),
+        (221, "Echinoidea"),
+        (255, "Clitellata"),
+        (229, "Malacostraca"),
+        (225, "Gastropoda"),
+        (361, "Diplopoda"),
+        (360, "Chilopoda"),
+        (121, "Elasmobranchii"),
+        (120, "Holocephali"),
+    ];
+    let priority_quota = limit.saturating_sub(inserted).max(1);
+    for (taxon_key, class_name) in priority_classes {
+        if inserted >= limit {
+            break;
+        }
+        seed_priority_class(
+            &client,
+            path.clone(),
+            &mut seen,
+            &mut inserted,
+            limit,
+            *taxon_key,
+            class_name,
+            priority_quota,
+        )
+        .await?;
     }
 
     // Phase 1: Seed from iNaturalist top observed animal taxa (most famous/observed species first)
@@ -890,6 +1032,11 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
                 order_name: gbif_data.get("order").and_then(|v| v.as_str()).map(ToOwned::to_owned),
                 family: gbif_data.get("family").and_then(|v| v.as_str()).map(ToOwned::to_owned),
                 genus: gbif_data.get("genus").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+                habitat: None,
+                diet: None,
+                activity_pattern: None,
+                conservation_status: None,
+                continents: None,
                 source: "iNaturalist".into(),
                 updated_at: Utc::now().to_rfc3339(),
             };
@@ -990,7 +1137,7 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize, offset: 
     if query.trim().is_empty() {
         let mut stmt = connection.prepare(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, habitat, diet, activity_pattern, conservation_status, continents, source, updated_at
             FROM species_index
             ORDER BY popularity_score DESC, common_name IS NULL, common_name ASC, scientific_name ASC
             LIMIT ?1 OFFSET ?2
@@ -1010,7 +1157,7 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize, offset: 
     let fts = fts_query(query);
     let mut stmt = connection.prepare(
         "
-        SELECT si.gbif_taxon_key, si.scientific_name, si.canonical_name, si.common_name, si.aliases, si.inat_taxon_id, si.popularity_score, si.rank, si.kingdom, si.phylum, si.class_name, si.order_name, si.family, si.genus, si.source, si.updated_at, bm25(species_index_fts) AS rank_score
+        SELECT si.gbif_taxon_key, si.scientific_name, si.canonical_name, si.common_name, si.aliases, si.inat_taxon_id, si.popularity_score, si.rank, si.kingdom, si.phylum, si.class_name, si.order_name, si.family, si.genus, si.habitat, si.diet, si.activity_pattern, si.conservation_status, si.continents, si.source, si.updated_at, bm25(species_index_fts) AS rank_score
         FROM species_index_fts
         JOIN species_index si ON si.rowid = species_index_fts.rowid
         WHERE species_index_fts MATCH ?1
@@ -1031,7 +1178,7 @@ fn local_fts_search(connection: &Connection, query: &str, limit: usize, offset: 
     if results.is_empty() {
         let mut fallback_stmt = connection.prepare(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, habitat, diet, activity_pattern, conservation_status, continents, source, updated_at
             FROM species_index
             ",
         )?;
@@ -1550,7 +1697,7 @@ fn get_index_record(connection: &Connection, gbif_taxon_key: i64) -> Result<Opti
     connection
         .query_row(
             "
-            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, source, updated_at
+            SELECT gbif_taxon_key, scientific_name, canonical_name, common_name, aliases, inat_taxon_id, popularity_score, rank, kingdom, phylum, class_name, order_name, family, genus, habitat, diet, activity_pattern, conservation_status, continents, source, updated_at
             FROM species_index
             WHERE gbif_taxon_key = ?1
             ",
@@ -1775,6 +1922,11 @@ pub async fn search_inat_autocomplete(
             order_name: gbif_data.get("order").and_then(|v| v.as_str()).map(ToOwned::to_owned),
             family: gbif_data.get("family").and_then(|v| v.as_str()).map(ToOwned::to_owned),
             genus: gbif_data.get("genus").and_then(|v| v.as_str()).map(ToOwned::to_owned),
+            habitat: None,
+            diet: None,
+            activity_pattern: None,
+            conservation_status: None,
+            continents: None,
             source: "iNaturalist".into(),
             updated_at: Utc::now().to_rfc3339(),
         };
@@ -1801,6 +1953,11 @@ pub async fn search_inat_autocomplete(
             order_name: record.order_name,
             family: record.family,
             genus: record.genus,
+            habitat: record.habitat,
+            diet: record.diet,
+            activity_pattern: record.activity_pattern,
+            conservation_status: record.conservation_status,
+            continents: record.continents,
             source: "iNaturalist".into(),
             updated_at: record.updated_at,
             score: final_score,
