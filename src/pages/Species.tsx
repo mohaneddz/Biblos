@@ -4,6 +4,7 @@ import { AnimalCard } from "../components/AnimalCard";
 import { SearchBar } from "../components/SearchBar";
 import { activityPatterns, continents } from "../data/discovery";
 import { animals } from "../data/animals";
+import { flattenTree, treeOfLife } from "../data/treeOfLife";
 import { getBookmarkedSpecies, getFavorites, getAllCachedSpecies, getHiddenSpecies } from "../services/cache";
 import { searchAnimals } from "../services/searchAnimals";
 import { lookupSpeciesAndStore, previewAnimalFromHit, searchSpeciesLocal, reciprocalRankFusion, type SpeciesSearchHit } from "../services/speciesStore";
@@ -45,6 +46,13 @@ export default function Species() {
   const filters = {
     query: searchParams.get("q") ?? "",
     className: searchParams.get("class") ?? "",
+    kingdom: searchParams.get("kingdom") ?? "",
+    phylum: searchParams.get("phylum") ?? "",
+    order: searchParams.get("order") ?? "",
+    family: searchParams.get("family") ?? "",
+    genus: searchParams.get("genus") ?? "",
+    species: searchParams.get("species") ?? "",
+    taxon: searchParams.get("taxon") ?? "",
     habitat: searchParams.get("habitat") ?? "",
     diet: searchParams.get("diet") ?? "",
     activityPattern: (searchParams.get("activity") ?? "") as "" | (typeof activityPatterns)[number],
@@ -59,7 +67,7 @@ export default function Species() {
   // Reset pagination on filter or query change
   useEffect(() => {
     setPage(1);
-  }, [filters.query, filters.className, filters.habitat, filters.diet, filters.activityPattern, filters.conservationStatus, filters.continent]);
+  }, [filters.query, filters.className, filters.kingdom, filters.phylum, filters.order, filters.family, filters.genus, filters.species, filters.taxon, filters.habitat, filters.diet, filters.activityPattern, filters.conservationStatus, filters.continent]);
 
   const useIndexedSearch = filters.query.trim().length > 0;
 
@@ -203,6 +211,13 @@ export default function Species() {
     allAvailableAnimals,
     filters.query,
     filters.className,
+    filters.kingdom,
+    filters.phylum,
+    filters.order,
+    filters.family,
+    filters.genus,
+    filters.species,
+    filters.taxon,
     filters.habitat,
     filters.diet,
     filters.activityPattern,
@@ -231,7 +246,16 @@ export default function Species() {
   }, [results, bookmarks]);
 
   const classes = useMemo(() => unique([
-    "Mammalia", "Aves", "Reptilia", "Amphibia", "Actinopterygii", "Chondrichthyes", "Insecta", "Arachnida",
+    "Mammalia", "Aves", "Reptilia", "Squamata", "Testudines", "Crocodylia", "Amphibia", "Actinopterygii", "Elasmobranchii", "Holocephali", "Sarcopterygii", "Petromyzontida", "Myxini",
+    "Insecta", "Arachnida", "Malacostraca", "Diplopoda", "Chilopoda", "Maxillopoda", "Merostomata",
+    "Gastropoda", "Cephalopoda", "Bivalvia", "Polyplacophora",
+    "Anthozoa", "Hydrozoa", "Scyphozoa", "Asteroidea", "Echinoidea", "Clitellata",
+    "Cyanophyceae", "Alphaproteobacteria", "Bacilli", "Actinomycetia", "Halobacteria", "Thermoprotei",
+    "Magnoliopsida", "Bryopsida", "Polypodiopsida", "Pinopsida", "Agaricomycetes", "Pezizomycetes",
+    "Dinophyceae", "Myxogastrea", "Phaeophyceae", "Bacteria", "Archaea", "Fungi", "Plantae", "Protista",
+    ...flattenTree(treeOfLife)
+      .filter((node) => node.rank === "Class")
+      .map((node) => node.scope?.className ?? node.label),
     ...allAvailableAnimals.map((a) => a.classification.className),
     ...indexedResults.map((a) => a.classification.className),
   ].filter(Boolean)), [allAvailableAnimals, indexedResults]);
@@ -452,7 +476,7 @@ export default function Species() {
     setSearchLoading(true);
     console.info("[species-search] local search started", { query: filters.query });
 
-    void searchSpeciesLocal(filters.query, 2000, 0)
+    void searchSpeciesLocal(filters.query, 5000, 0)
       .then((response) => {
         if (!active) {
           return;
@@ -526,6 +550,21 @@ export default function Species() {
             }
           />
         </div>
+
+        {[
+          ["Kingdom", filters.kingdom],
+          ["Phylum", filters.phylum],
+          ["Class", filters.className],
+          ["Order", filters.order],
+          ["Family", filters.family],
+          ["Genus", filters.genus],
+          ["Species", filters.species],
+          ["Taxon", filters.taxon],
+        ].filter(([, value]) => value).map(([label, value]) => (
+          <div key={label} className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="tag-chip text-app-accent border-app-accent/25">{label}: {value}</span>
+          </div>
+        ))}
 
         {parsedFiltersBanner && parsedFilters && (
           <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-2xl border border-app-accent/20 bg-app-accent/5 p-4 text-sm text-app-soft transition animate-fade-in">
