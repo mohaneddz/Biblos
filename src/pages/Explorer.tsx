@@ -79,6 +79,13 @@ const HABITAT_CARDS = [
     blurb: "Marshes, bogs, and river floodplains providing vital filtration and nurseries.",
   },
   {
+    id: "mangrove",
+    title: "Mangrove Coast",
+    link: "/ecosystems/mangrove",
+    imageUrl: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80",
+    blurb: "Salt-tolerant intertidal tidal forests with submerged prop roots protecting coastal nurseries.",
+  },
+  {
     id: "arctic-tundra",
     title: "Arctic Tundra",
     link: "/ecosystems/arctic-tundra",
@@ -447,7 +454,7 @@ export default function Explorer() {
                 alt={card.title}
                 className="absolute inset-0 h-full w-full object-cover opacity-80 transition duration-700 group-hover:scale-105 group-hover:opacity-95"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
               <div className="relative z-10 mt-auto">
                 <h3 className="text-lg font-bold text-white group-hover:text-app-accent transition leading-snug drop-shadow-md">
@@ -494,7 +501,7 @@ export default function Explorer() {
                   alt={c.label}
                   className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105 group-hover:opacity-90"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
@@ -545,7 +552,7 @@ export default function Explorer() {
                   alt={d.label}
                   className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
@@ -596,7 +603,7 @@ export default function Explorer() {
                   alt={status.label}
                   className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
@@ -647,7 +654,7 @@ export default function Explorer() {
                   alt={act.label}
                   className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
@@ -712,7 +719,7 @@ export default function Explorer() {
                   alt={continent}
                   className="absolute inset-0 h-full w-full object-cover opacity-65 transition duration-500 group-hover:scale-105 group-hover:opacity-85"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-35% to-transparent pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">

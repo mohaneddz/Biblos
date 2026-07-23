@@ -301,7 +301,7 @@ export default function TraitDetail({ traitCategory }: { traitCategory?: TraitCa
             className="absolute inset-0 h-full w-full object-cover opacity-60"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/80 via-50% to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-40% to-transparent pointer-events-none" />
         <div className="relative z-10 max-w-4xl">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/40 bg-app-accent/20 text-app-accent backdrop-blur-md">
