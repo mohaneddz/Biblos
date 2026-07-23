@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { useSpeciesMedia } from "../hooks/useSpeciesMedia";
+import { getNodeCoverData } from "../data/classCovers";
 import type { Animal } from "../types/animal";
 
 type SpeciesImageProps = {
@@ -13,31 +15,46 @@ export function SpeciesImage({
   animal,
   className = "",
   fitClassName = "h-full w-full object-cover",
-  labelClassName = "text-sm text-app-text",
   imageUrl,
 }: SpeciesImageProps) {
-  const directImage = imageUrl ?? animal.heroImage ?? animal.images[0] ?? null;
-  const { primaryImage, loading } = useSpeciesMedia(animal, "primary");
+  const { primaryImage } = useSpeciesMedia(animal, "primary");
+  const [errorIndex, setErrorIndex] = useState(0);
+
+  useEffect(() => {
+    setErrorIndex(0);
+  }, [animal.id, imageUrl]);
+
+  const coverData = getNodeCoverData(
+    animal.classification?.className || animal.classification?.kingdom || animal.classification?.order
+  );
+
+  const candidateUrls = [
+    ...(imageUrl ? [imageUrl] : []),
+    ...(animal.heroImage ? [animal.heroImage] : []),
+    ...animal.images,
+    ...(primaryImage?.url ? [primaryImage.url] : []),
+    ...(primaryImage?.thumbnailUrl ? [primaryImage.thumbnailUrl] : []),
+    coverData.heroUrl,
+    coverData.thumbnailUrl,
+  ].filter((url, index, self): url is string => Boolean(url) && self.indexOf(url) === index);
+
+  const currentUrl = candidateUrls[errorIndex] ?? coverData.heroUrl;
+
+  const handleImageError = () => {
+    if (errorIndex < candidateUrls.length - 1) {
+      setErrorIndex((prev) => prev + 1);
+    }
+  };
 
   const combinedClassName = `${className} ${fitClassName}`.trim();
 
-  if (directImage) {
-    return <img src={directImage} alt={animal.commonName} className={combinedClassName} />;
-  }
-
-  if (primaryImage) {
-    return (
-      <img
-        src={primaryImage.thumbnailUrl ?? primaryImage.url}
-        alt={primaryImage.alt || animal.commonName}
-        className={combinedClassName}
-      />
-    );
-  }
-
   return (
-    <div className={`${className} placeholder-media flex items-end p-4`}>
-      {loading ? <span className={labelClassName}>Resolving image...</span> : null}
-    </div>
+    <img
+      src={currentUrl}
+      alt={animal.commonName}
+      className={combinedClassName}
+      onError={handleImageError}
+    />
   );
 }
+

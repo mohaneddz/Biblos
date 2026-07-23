@@ -1,75 +1,250 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { activityPatterns, continents } from "../data/discovery";
+import { continents } from "../data/discovery";
 import { animals } from "../data/animals";
 import type { Continent } from "../types/animal";
-import { BinocularsIcon, BirdIcon, GlobeGridIcon, LeafClusterIcon, MammalIcon, MountainIcon, RiverIcon } from "../components/icons";
+import {
+  AlertShieldIcon,
+  BinocularsIcon,
+  BirdIcon,
+  BranchIcon,
+  ChevronRightIcon,
+  GlobeGridIcon,
+  LeafClusterIcon,
+  LeafIcon,
+  MammalIcon,
+  MarineIcon,
+  MicrobeIcon,
+  MoonIcon,
+  MountainIcon,
+  PawIcon,
+  ReptileIcon,
+  ShieldIcon,
+  SunIcon,
+  SunriseIcon,
+  TreeLogoIcon,
+} from "../components/icons";
+import { getNodeCoverData } from "../data/classCovers";
 
-function unique(items: string[]) {
-  return [...new Set(items)].sort();
-}
-
-const diets = unique(animals.map((animal) => animal.diet));
-const habitats = unique(animals.flatMap((animal) => animal.habitat));
-const statuses = unique(animals.map((animal) => animal.conservationStatus));
-const classes = unique(animals.map((animal) => animal.classification.className));
-
-const routeCards = [
-  { 
-    title: "Habitats", 
-    icon: MountainIcon, 
-    blurb: "Jump by ecological setting rather than species name.", 
-    keyName: "habitat", 
-    items: habitats.slice(0, 8), 
-    accent: "lg:col-span-2",
-    glowClass: "from-[#10b981]/5 hover:border-[#10b981]/25 hover:shadow-[0_0_25px_rgba(16,185,129,0.06)]"
+// Curated visuals for Habitat Cards (High-definition Unsplash photography)
+const HABITAT_CARDS = [
+  {
+    id: "tropical-rainforest",
+    title: "Tropical Rainforest",
+    link: "/ecosystems/tropical-rainforest",
+    imageUrl: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=800&q=80",
+    blurb: "Dense canopy layers, warm precipitation, and Earth's richest biodiversity hotspots.",
   },
-  { 
-    title: "Activity", 
-    icon: BinocularsIcon, 
-    blurb: "Surface diurnal, nocturnal, and crepuscular records fast.", 
-    keyName: "activity", 
-    items: activityPatterns, 
-    accent: "",
-    glowClass: "from-[#f59e0b]/5 hover:border-[#f59e0b]/25 hover:shadow-[0_0_25px_rgba(245,158,11,0.06)]"
+  {
+    id: "coral-reef",
+    title: "Coral Reef",
+    link: "/ecosystems/coral-reef",
+    imageUrl: "https://images.unsplash.com/photo-1546026423-cc4642628d2b?auto=format&fit=crop&w=800&q=80",
+    blurb: "Shallow, sunlit marine ecosystems supporting 25% of all ocean life.",
   },
-  { 
-    title: "Diet", 
-    icon: LeafClusterIcon, 
-    blurb: "Split the directory into herbivores, carnivores, and omnivores.", 
-    keyName: "diet", 
-    items: diets, 
-    accent: "",
-    glowClass: "from-[#14b8a6]/5 hover:border-[#14b8a6]/25 hover:shadow-[0_0_25px_rgba(20,184,166,0.06)]"
+  {
+    id: "african-savanna",
+    title: "African Savanna",
+    link: "/ecosystems/african-savanna",
+    imageUrl: "https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80",
+    blurb: "Vast tropical grasslands defined by seasonal rain and megafauna migrations.",
   },
-  { 
-    title: "Conservation", 
-    icon: GlobeGridIcon, 
-    blurb: "Focus immediately on threatened or stable species groups.", 
-    keyName: "status", 
-    items: statuses, 
-    accent: "lg:row-span-2",
-    glowClass: "from-[#f43f5e]/5 hover:border-[#f43f5e]/25 hover:shadow-[0_0_25px_rgba(244,63,94,0.06)]"
+  {
+    id: "deep-ocean",
+    title: "Deep Ocean & Hydrothermal Vents",
+    link: "/ecosystems/deep-ocean",
+    imageUrl: "https://images.unsplash.com/photo-1682687220063-4742bd7fd538?auto=format&fit=crop&w=800&q=80",
+    blurb: "High-pressure, lightless abyss reliant on marine snow and chemosynthesis.",
   },
-  { 
-    title: "Classes", 
-    icon: MammalIcon, 
-    blurb: "Move by major body plan before narrowing to family or species.", 
-    keyName: "class", 
-    items: classes, 
-    accent: "",
-    glowClass: "from-[#6366f1]/5 hover:border-[#6366f1]/25 hover:shadow-[0_0_25px_rgba(99,102,241,0.06)]"
+  {
+    id: "temperate-forest",
+    title: "Temperate Deciduous Forest",
+    link: "/ecosystems/temperate-forest",
+    imageUrl: "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80",
+    blurb: "Four distinct seasons with broadleaf trees shedding foliage annually.",
   },
-  { 
-    title: "Water Systems", 
-    icon: RiverIcon, 
-    blurb: "Quick routes into wetlands, estuaries, rivers, coasts, and reefs.", 
-    keyName: "habitat", 
-    items: habitats.filter((item) => /(wetland|coast|ocean|estuary|kelp|mangrove|lake|seagrass)/i.test(item)).slice(0, 6), 
-    accent: "",
-    glowClass: "from-[#06b6d4]/5 hover:border-[#06b6d4]/25 hover:shadow-[0_0_25px_rgba(6,182,212,0.06)]"
+  {
+    id: "desert",
+    title: "Arid Desert",
+    link: "/ecosystems/desert",
+    imageUrl: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=800&q=80",
+    blurb: "Extreme temperatures and scarce moisture with highly adapted specialists.",
+  },
+  {
+    id: "freshwater-wetland",
+    title: "Freshwater Wetlands & Rivers",
+    link: "/ecosystems/freshwater-wetland",
+    imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80",
+    blurb: "Marshes, bogs, and river floodplains providing vital filtration and nurseries.",
+  },
+  {
+    id: "arctic-tundra",
+    title: "Arctic Tundra",
+    link: "/ecosystems/arctic-tundra",
+    imageUrl: "https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=800&q=80",
+    blurb: "Treeless, frozen permafrost landscapes enduring extreme polar winters.",
   },
 ];
+
+// Curated Classes for Lineage Cards
+const CLASS_CARDS = [
+  { id: "mammalia", label: "Mammalia", desc: "Mammals", icon: MammalIcon },
+  { id: "aves", label: "Aves", desc: "Birds", icon: BirdIcon },
+  { id: "reptilia", label: "Reptilia", desc: "Reptiles", icon: ReptileIcon },
+  { id: "amphibia", label: "Amphibia", desc: "Amphibians", icon: LeafIcon },
+  { id: "actinopterygii", label: "Actinopterygii", desc: "Ray-finned Fishes", icon: MarineIcon },
+  { id: "insecta", label: "Insecta", desc: "Insects & Invertebrates", icon: BinocularsIcon },
+  { id: "plantae", label: "Plantae", desc: "Plants & Flora", icon: LeafClusterIcon },
+  { id: "fungi", label: "Fungi", desc: "Mushrooms & Yeasts", icon: TreeLogoIcon },
+  { id: "bacteria", label: "Bacteria", desc: "Microbes & Prokaryotes", icon: MicrobeIcon },
+  { id: "archaea", label: "Archaea", desc: "Extremophiles", icon: MicrobeIcon },
+];
+
+// Dietary Profile Cards with Photography & SVG Icons
+const DIET_CARDS = [
+  {
+    key: "carnivore",
+    label: "Carnivore",
+    desc: "Meat-eaters & hunters",
+    icon: PawIcon,
+    imageUrl: "https://images.unsplash.com/photo-1561731216-c3a4d99437d5?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "herbivore",
+    label: "Herbivore",
+    desc: "Plant-eaters & grazers",
+    icon: LeafClusterIcon,
+    imageUrl: "https://images.unsplash.com/photo-1547721064-da6cfb341d50?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "omnivore",
+    label: "Omnivore",
+    desc: "Versatile plant & meat feeders",
+    icon: TreeLogoIcon,
+    imageUrl: "https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "insectivore",
+    label: "Insectivore",
+    desc: "Bug & small invertebrate specialists",
+    icon: BinocularsIcon,
+    imageUrl: "https://images.unsplash.com/photo-1531386151447-fd76ad50012f?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "piscivore",
+    label: "Piscivore",
+    desc: "Fish-eating hunters",
+    icon: MarineIcon,
+    imageUrl: "https://images.unsplash.com/photo-1516683011827-46882a229ad5?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "filter feeder",
+    label: "Filter Feeder",
+    desc: "Marine plankton strainers",
+    icon: GlobeGridIcon,
+    imageUrl: "https://images.unsplash.com/photo-1560275619-4662e36fa65c?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "detritivore",
+    label: "Detritivore",
+    desc: "Soil recyclers & decomposers",
+    icon: BranchIcon,
+    imageUrl: "https://images.unsplash.com/photo-1535591273668-578e31182c4f?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "autotroph",
+    label: "Autotroph",
+    desc: "Photosynthetic plants & algae",
+    icon: LeafIcon,
+    imageUrl: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80",
+  },
+];
+
+// Conservation Status Cards with Photography & SVG Icons
+const CONSERVATION_CARDS = [
+  {
+    key: "critically endangered",
+    label: "Critically Endangered",
+    desc: "Extremely high extinction risk",
+    icon: AlertShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1456926631375-92c8ce872def?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "endangered",
+    label: "Endangered",
+    desc: "High threat tier in the wild",
+    icon: ShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "vulnerable",
+    label: "Vulnerable",
+    desc: "High risk unless threats cease",
+    icon: ShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "near threatened",
+    label: "Near Threatened",
+    desc: "Close to qualifying for threat tier",
+    icon: ShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1543946207-39bd91e70ca7?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "least concern",
+    label: "Least Concern",
+    desc: "Stable & widespread populations",
+    icon: ShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1474511320723-9a56873867b5?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "extinct",
+    label: "Extinct",
+    desc: "No remaining individuals",
+    icon: ShieldIcon,
+    imageUrl: "https://images.unsplash.com/photo-1569742918414-0498b584d412?auto=format&fit=crop&w=800&q=80",
+  },
+];
+
+// Activity Pattern Cards with Photography & SVG Icons (No Emojis!)
+const ACTIVITY_CARDS = [
+  {
+    key: "diurnal",
+    label: "Diurnal",
+    tag: "Daylight Active",
+    desc: "Active during daylight hours",
+    icon: SunIcon,
+    imageUrl: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "nocturnal",
+    label: "Nocturnal",
+    tag: "Night Active",
+    desc: "Active under cover of night",
+    icon: MoonIcon,
+    imageUrl: "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=800&q=80",
+  },
+  {
+    key: "crepuscular",
+    label: "Crepuscular",
+    tag: "Twilight Active",
+    desc: "Active during dawn and dusk",
+    icon: SunriseIcon,
+    imageUrl: "https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=800&q=80",
+  },
+];
+
+// Continent Regional Covers
+const CONTINENT_COVERS: Record<string, string> = {
+  Africa: "https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80",
+  Asia: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
+  Europe: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80",
+  "North America": "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80",
+  "South America": "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=800&q=80",
+  Australia: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80",
+  Oceans: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+  Antarctica: "https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=800&q=80",
+};
 
 export default function Explorer() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,153 +267,407 @@ export default function Explorer() {
   };
 
   return (
-    <div className="page-frame">
-      <section className="page-card overflow-hidden rounded-[1.9rem] p-6 md:p-7 shrink-0">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(20rem,0.98fr)]">
-          <div className="flex flex-col justify-between min-w-0">
-            <div>
-              <div className="flex items-center justify-between">
-                <h1 className="page-title select-none">Explorer</h1>
-                <button
-                  type="button"
-                  onClick={toggle}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
-                  title={isCollapsed ? "Show description" : "Hide description"}
-                >
-                  {isCollapsed ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-
-              <div
-                className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                  isCollapsed ? "max-h-0 opacity-0 mt-0" : "max-h-[12rem] opacity-100 mt-3"
-                }`}
-              >
-                <p className="page-lede text-app-muted pr-2">
-                  Explorer is the organic discovery surface for Biblos: traits and regions live together here, and the atlas browsing flow is integrated directly into this page.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Link to="/species" className="primary-button text-sm cursor-pointer select-none">
-                    Open full directory
-                  </Link>
+    <div className="page-frame space-y-8">
+      {/* Header Banner */}
+      <section className="page-card overflow-hidden rounded-[2.2rem] p-6 md:p-8 shrink-0 relative bg-gradient-to-br from-[#0c1410] via-[#090f0c] to-[#040705] border border-white/12 shadow-2xl">
+        <div className="flex flex-col justify-between min-w-0 relative z-10">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-app-accent/30 bg-app-accent/15 text-app-accent">
+                  <BinocularsIcon className="h-6 w-6" />
+                </span>
+                <div>
+                  <h1 className="page-title select-none text-4xl md:text-5xl">Explorer Portal</h1>
+                  <p className="text-xs uppercase tracking-[0.2em] font-semibold text-app-soft mt-1">Ecosystems · Traits · Lineages · Regions</p>
                 </div>
+              </div>
+              <button
+                type="button"
+                onClick={toggle}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
+                title={isCollapsed ? "Show description" : "Hide description"}
+              >
+                {isCollapsed ? "+" : "−"}
+              </button>
+            </div>
+
+            <div
+              className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                isCollapsed ? "max-h-0 opacity-0 mt-0" : "max-h-[12rem] opacity-100 mt-4"
+              }`}
+            >
+              <p className="page-lede text-app-muted max-w-3xl leading-7 text-sm md:text-base">
+                Explorer is the organic discovery surface for Biblos. Jump into Earth's ecosystems, major taxonomic classes, dietary profiles, conservation tiers, circadian activity rhythms, and geographic regions.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link to="/species" className="primary-button text-xs cursor-pointer select-none">
+                  Open full directory (21,544 species)
+                </Link>
+                <Link to="/ecosystems" className="ghost-button text-xs cursor-pointer select-none">
+                  All 15 Biomes
+                </Link>
+                <Link to="/tree" className="ghost-button text-xs cursor-pointer select-none">
+                  Tree of Life
+                </Link>
               </div>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
-              <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Routes</span>
-              <p className="mt-3 text-3xl font-semibold text-white">{routeCards.length}</p>
-              <p className="mt-2 text-sm leading-6 text-app-muted">Trait-led entry points</p>
-            </div>
-            <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
-              <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Regions</span>
-              <p className="mt-3 text-3xl font-semibold text-white">{continents.length}</p>
-              <p className="mt-2 text-sm leading-6 text-app-muted">Atlas browsing now lives here</p>
-            </div>
-            <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
-              <span className="text-xs uppercase tracking-[0.18em] text-app-soft">Directory</span>
-              <p className="mt-3 text-3xl font-semibold text-white">{animals.length}</p>
-              <p className="mt-2 text-sm leading-6 text-app-muted">Species available for filtering</p>
-            </div>
+        </div>
+
+        {/* Dynamic Metric Tiles Row */}
+        <div className="mt-6 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border-t border-white/10 pt-5">
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">21,544</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Indexed species</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">15</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Biomes & Habitats</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">8</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Kingdoms & Lineages</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">8</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Dietary Profiles</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">6</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Conservation Tiers</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-center">
+            <p className="text-xl font-bold text-white">8</p>
+            <p className="text-[10px] uppercase tracking-wider text-app-soft mt-0.5">Geographic Regions</p>
           </div>
         </div>
       </section>
 
-      <section>
-        <div className="mb-4">
-          <h2 className="page-section-title">Discovery Grid</h2>
-          <p className="mt-2 text-sm leading-7 text-app-muted">Each tile launches the species directory with the right filter already applied.</p>
+      {/* SECTION 1: HABITATS & ECOSYSTEM CARDS GRID */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="page-section-title flex items-center gap-2">
+              <MountainIcon className="h-5 w-5 text-app-accent" /> Ecosystems & Habitats
+            </h2>
+            <p className="mt-1 text-sm text-app-muted">Visual entry points into Earth's major ecological biomes and settings.</p>
+          </div>
+          <Link to="/ecosystems" className="ghost-button text-xs cursor-pointer">
+            View all biomes <ChevronRightIcon className="h-3.5 w-3.5" />
+          </Link>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {routeCards.map(({ title, icon: Icon, blurb, keyName, items, accent, glowClass }) => (
-            <article
-              key={title}
-              className={[
-                "page-card interactive-card rounded-[1.6rem] p-5 relative overflow-hidden bg-gradient-to-br to-transparent border border-white/8 transition-all duration-300 group",
-                glowClass,
-                accent
-              ].join(" ")}
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {HABITAT_CARDS.map((card) => (
+            <Link
+              key={card.id}
+              to={card.link}
+              className="group relative flex flex-col justify-end overflow-hidden rounded-[1.6rem] border border-white/12 bg-[#060a08] p-5 transition duration-300 hover:scale-[1.03] hover:border-app-accent/40 hover:shadow-2xl hover:no-underline aspect-[4/3]"
             >
-              <div className="flex items-center gap-3 text-app-accent">
-                <Icon className="h-5 w-5 transition duration-300 group-hover:scale-110" />
-                <span className="text-xs uppercase tracking-[0.22em]">{title}</span>
+              <img
+                src={card.imageUrl}
+                alt={card.title}
+                className="absolute inset-0 h-full w-full object-cover opacity-80 transition duration-700 group-hover:scale-105 group-hover:opacity-95"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+              <div className="relative z-10 mt-auto">
+                <h3 className="text-lg font-bold text-white group-hover:text-app-accent transition leading-snug drop-shadow-md">
+                  {card.title}
+                </h3>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-app-muted opacity-90 drop-shadow">
+                  {card.blurb}
+                </p>
+                <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-app-accent group-hover:translate-x-1 transition">
+                  Explore Ecosystem <ChevronRightIcon className="h-3.5 w-3.5" />
+                </div>
               </div>
-              <p className="mt-4 max-w-[40rem] text-sm leading-7 text-app-muted">{blurb}</p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {items.map((item) => (
-                  <Link key={item} to={`/species?${keyName}=${encodeURIComponent(item)}`} className="tag-chip interactive-chip">
-                    {item}
-                  </Link>
-                ))}
-              </div>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
 
-      <section className="page-card rounded-[1.8rem] p-5 md:p-6">
+      {/* SECTION 2: TAXONOMIC CLASSES & DOMAINS */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="page-section-title flex items-center gap-2">
+              <BranchIcon className="h-5 w-5 text-app-accent" /> Taxonomic Classes & Lineages
+            </h2>
+            <p className="mt-1 text-sm text-app-muted">Branch out by major body plans, evolutionary lineages, and biological domains.</p>
+          </div>
+          <Link to="/tree" className="ghost-button text-xs cursor-pointer">
+            Explore Tree of Life <ChevronRightIcon className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid gap-3.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+          {CLASS_CARDS.map((c) => {
+            const cover = getNodeCoverData(c.id);
+            const Icon = c.icon;
+            return (
+              <Link
+                key={c.id}
+                to={`/life-class/${c.id}`}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-[1.4rem] border border-white/12 bg-[#060a08] p-4 transition duration-300 hover:scale-[1.03] hover:border-app-accent/40 hover:shadow-xl hover:no-underline aspect-[3/4]"
+              >
+                <img
+                  src={cover.heroUrl}
+                  alt={c.label}
+                  className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105 group-hover:opacity-90"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                </div>
+
+                <div className="relative z-10 mt-auto">
+                  <h3 className="text-base font-bold text-white group-hover:text-app-accent transition leading-tight drop-shadow-md">
+                    {c.label}
+                  </h3>
+                  <p className="mt-1 text-[11px] text-app-muted opacity-85">
+                    {c.desc}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-2 text-[11px] font-medium text-app-soft">
+                    <span>View Class</span>
+                    <span className="text-app-accent group-hover:translate-x-1 transition">→</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 3: DIETARY PROFILES WITH BACKGROUND PHOTOGRAPHY */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="page-section-title flex items-center gap-2">
+              <LeafClusterIcon className="h-5 w-5 text-app-accent" /> Dietary Profiles
+            </h2>
+            <p className="mt-1 text-sm text-app-muted">Explore species grouped by ecological feeding strategies and food webs.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+          {DIET_CARDS.map((d) => {
+            const Icon = d.icon;
+            return (
+              <Link
+                key={d.key}
+                to={`/explore/diet/${encodeURIComponent(d.key)}`}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/12 bg-[#060a08] p-5 transition duration-300 hover:scale-[1.03] hover:border-app-accent/40 hover:shadow-2xl hover:no-underline aspect-[4/3]"
+              >
+                <img
+                  src={d.imageUrl}
+                  alt={d.label}
+                  className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                </div>
+
+                <div className="relative z-10 mt-auto">
+                  <h3 className="text-lg font-bold text-white group-hover:text-app-accent transition leading-snug drop-shadow-md">
+                    {d.label}
+                  </h3>
+                  <p className="mt-1 text-xs text-app-muted leading-5 opacity-90 drop-shadow">
+                    {d.desc}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-2 text-xs font-semibold text-app-accent">
+                    <span>Explore {d.label} species</span>
+                    <span className="group-hover:translate-x-1 transition">→</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 4: CONSERVATION STATUS TIER CARDS WITH BACKGROUND PHOTOGRAPHY */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="page-section-title flex items-center gap-2">
+              <GlobeGridIcon className="h-5 w-5 text-app-accent" /> Conservation Status Tiers
+            </h2>
+            <p className="mt-1 text-sm text-app-muted">Focus immediately on extinction risk tiers and IUCN Red List categories.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          {CONSERVATION_CARDS.map((status) => {
+            const Icon = status.icon;
+            return (
+              <Link
+                key={status.key}
+                to={`/explore/status/${encodeURIComponent(status.key)}`}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/12 bg-[#060a08] p-5 transition duration-300 hover:scale-[1.03] hover:border-app-accent/40 hover:shadow-2xl hover:no-underline aspect-[16/9]"
+              >
+                <img
+                  src={status.imageUrl}
+                  alt={status.label}
+                  className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                </div>
+
+                <div className="relative z-10 mt-auto">
+                  <h3 className="text-lg font-bold text-white group-hover:text-app-accent transition leading-snug drop-shadow-md">
+                    {status.label}
+                  </h3>
+                  <p className="mt-1 text-xs text-app-muted leading-5 opacity-90 drop-shadow">
+                    {status.desc}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-2 text-xs font-semibold text-app-accent">
+                    <span>View {status.label} species</span>
+                    <span className="group-hover:translate-x-1 transition">→</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 5: ACTIVITY PATTERN RHYTHM CARDS WITH BACKGROUND PHOTOGRAPHY & SVG ICONS */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="page-section-title flex items-center gap-2">
+              <BinocularsIcon className="h-5 w-5 text-app-accent" /> Activity Patterns & Circadian Rhythms
+            </h2>
+            <p className="mt-1 text-sm text-app-muted">Filter species by time of day activity patterns.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          {ACTIVITY_CARDS.map((act) => {
+            const Icon = act.icon;
+            return (
+              <Link
+                key={act.key}
+                to={`/explore/activity/${encodeURIComponent(act.key)}`}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-[1.6rem] border border-white/12 bg-[#060a08] p-6 transition duration-300 hover:scale-[1.03] hover:border-app-accent/40 hover:shadow-2xl hover:no-underline aspect-[16/10]"
+              >
+                <img
+                  src={act.imageUrl}
+                  alt={act.label}
+                  className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                </div>
+
+                <div className="relative z-10 mt-auto">
+                  <h3 className="text-2xl font-bold text-white group-hover:text-app-accent transition drop-shadow-md">
+                    {act.label}
+                  </h3>
+                  <p className="mt-1 text-xs text-app-muted leading-5 opacity-90 drop-shadow">
+                    {act.desc}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs font-semibold text-app-accent">
+                    <span>Browse {act.key} species</span>
+                    <span className="group-hover:translate-x-1 transition">→</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 6: REGIONAL GEOGRAPHIC ATLAS WITH CONTINENT COVER PHOTOGRAPHY */}
+      <section className="page-card rounded-[1.8rem] p-6 md:p-8 space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="page-section-title">Regional Atlas</h2>
-            <p className="mt-2 text-sm leading-7 text-app-muted">The old atlas tools now live inside Explorer so place-based browsing stays connected to the trait grid and biome library.</p>
+            <h2 className="page-section-title flex items-center gap-2">
+              <GlobeGridIcon className="h-5 w-5 text-app-accent" /> Regional Geographic Atlas
+            </h2>
+            <p className="mt-1 text-sm leading-7 text-app-muted">
+              Place-based browsing integrated directly into Explorer across Earth's continents and ocean basins.
+            </p>
           </div>
-          <Link to={`/species?continent=${encodeURIComponent(selectedContinent)}`} className="ghost-button text-sm cursor-pointer select-none">
+          <Link to={`/species?continent=${encodeURIComponent(selectedContinent)}`} className="ghost-button text-xs cursor-pointer select-none">
             Open {selectedContinent} in directory
           </Link>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {continents.map((continent) => (
-            <button
-              key={continent}
-              type="button"
-              onClick={() => setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("continent", continent);
-                return next;
-              })}
-              className={[
-                "interactive-card rounded-[1.3rem] border px-4 py-4 text-left cursor-pointer",
-                continent === selectedContinent ? "border-app-accent/35 bg-app-accent/9" : "border-white/8 bg-white/[0.03]",
-              ].join(" ")}
-            >
-              <div className="flex items-center gap-3">
-                <GlobeGridIcon className="h-5 w-5 text-app-accent" />
-                <div>
-                  <p className="text-lg font-semibold text-white">{continent}</p>
-                  <p className="text-sm text-app-muted">{animals.filter((animal) => animal.continents.includes(continent)).length} species</p>
+        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+          {continents.map((continent) => {
+            const coverUrl = CONTINENT_COVERS[continent] ?? CONTINENT_COVERS["Africa"];
+            const isSelected = continent === selectedContinent;
+            return (
+              <button
+                key={continent}
+                type="button"
+                onClick={() => setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set("continent", continent);
+                  return next;
+                })}
+                className={[
+                  "group relative flex flex-col justify-between overflow-hidden rounded-[1.4rem] border p-4 text-left cursor-pointer transition duration-300 aspect-[16/10]",
+                  isSelected ? "border-app-accent/60 ring-2 ring-app-accent/40" : "border-white/12 hover:border-app-accent/40",
+                ].join(" ")}
+              >
+                <img
+                  src={coverUrl}
+                  alt={continent}
+                  className="absolute inset-0 h-full w-full object-cover opacity-65 transition duration-500 group-hover:scale-105 group-hover:opacity-85"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#040e08] via-[#07190e]/75 via-45% to-transparent" />
+
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
+                    <GlobeGridIcon className="h-4 w-4" />
+                  </span>
                 </div>
-              </div>
-            </button>
-          ))}
+
+                <div className="relative z-10 mt-auto">
+                  <p className="text-lg font-bold text-white leading-tight drop-shadow-md group-hover:text-app-accent transition">{continent}</p>
+                  <p className="text-xs text-app-muted mt-0.5 drop-shadow">
+                    {animals.filter((animal) => animal.continents.includes(continent)).length} directory species
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="mt-6">
-          <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-5 w-full">
-            <div className="flex items-center gap-3 text-app-accent">
-              <BirdIcon className="h-5 w-5" />
-              <span className="text-xs uppercase tracking-[0.22em]">Current Region</span>
-            </div>
-            <h3 className="mt-3 text-3xl font-semibold text-white">{selectedContinent}</h3>
-            <p className="mt-3 text-sm leading-7 text-app-muted">Species in this region from the current Biblos directory:</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {continentSpecies.slice(0, 24).map((animal) => (
-                <Link key={animal.id} to={`/species/${animal.id}`} className="tag-chip interactive-chip">
-                  {animal.commonName}
-                </Link>
-              ))}
-              {continentSpecies.length === 0 ? <span className="tag-chip">No local records yet</span> : null}
-            </div>
+        {/* Selected Region Species Preview */}
+        <div className="rounded-[1.6rem] border border-white/10 bg-black/50 p-5 mt-4">
+          <div className="flex items-center gap-2.5 text-app-accent mb-2">
+            <BirdIcon className="h-4 w-4" />
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">Selected Geographic Region</span>
+          </div>
+          <h3 className="text-2xl font-bold text-white">{selectedContinent}</h3>
+          <p className="mt-1 text-xs text-app-muted">Featured species from {selectedContinent}:</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {continentSpecies.slice(0, 20).map((animal) => (
+              <Link key={animal.id} to={`/species/${animal.id}`} className="tag-chip interactive-chip">
+                {animal.commonName}
+              </Link>
+            ))}
           </div>
         </div>
       </section>

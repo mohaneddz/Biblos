@@ -211,12 +211,18 @@ export function deleteCachedSpecies(id: string) {
   if (hasStorage()) {
     window.localStorage.removeItem(`${SPECIES_PREFIX}${id}`);
     // Also remove from favorites, bookmarks, recents
-    const favs = getFavorites().filter(item => item !== id);
+    const favs = getFavorites().filter((item) => item !== id);
     writeJson(FAVORITES_KEY, favs);
-    const books = getBookmarkedSpecies().filter(item => item !== id);
+    const books = getBookmarkedSpecies().filter((item) => item !== id);
     writeJson(BOOKMARKS_KEY, books);
-    const recs = getRecentlyViewedIds().filter(item => item !== id);
+    const recs = getRecentlyViewedIds().filter((item) => item !== id);
     writeJson(RECENTS_KEY, recs);
+
+    // Optimistically add to hidden species so it disappears instantly from all views
+    const currentHidden = getHiddenSpecies();
+    if (!currentHidden.includes(id)) {
+      writeJson(HIDDEN_KEY, [...currentHidden, id]);
+    }
   }
   notifyCacheUpdated();
 }
