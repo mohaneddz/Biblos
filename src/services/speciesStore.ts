@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { animalMap, animals } from "../data/animals";
-import { getCachedSpecies } from "./cache";
+import { getCachedSpecies, setCachedSpecies } from "./cache";
 import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../types/animal";
 import type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse } from "../types/speciesStore";
 import { hydrateSpeciesWithAI } from "./aiSpeciesService";
@@ -13,7 +13,12 @@ import {
 } from "./gbifService";
 import { reportError } from "./errorReporter";
 import {
+  inferKingdomFromHit,
+  inferPhylumFromHit,
   inferClassFromHit,
+  inferOrderFromHit,
+  inferFamilyFromHit,
+  inferGenusFromHit,
   inferHabitatFromHit,
   inferDietFromHit,
   inferActivityPatternFromHit,
@@ -133,12 +138,20 @@ function mockSearch(query: string) {
 import { isLatinText } from "./gbifService";
 
 export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
+  const inferredKingdom = inferKingdomFromHit(hit);
+  const inferredPhylum = inferPhylumFromHit(hit);
   const inferredClass = inferClassFromHit(hit);
-  const inferredHabitat = hit.habitat ? [hit.habitat] : [inferHabitatFromHit(hit)];
-  const inferredDiet = hit.diet ?? inferDietFromHit(hit);
-  const inferredActivity = (hit.activity_pattern as Animal["activityPattern"]) ?? inferActivityPatternFromHit(hit);
-  const inferredContinents = hit.continents ? [hit.continents as Continent] : inferContinentsFromHit(hit);
-  const inferredStatus = (hit.conservation_status as Animal["conservationStatus"]) ?? inferConservationStatusFromHit(hit);
+  const inferredOrder = inferOrderFromHit(hit);
+  const inferredFamily = inferFamilyFromHit(hit);
+  const inferredGenus = inferGenusFromHit(hit);
+
+  const rawHabitat = hit.habitat?.trim();
+  const inferredHabitat = rawHabitat ? rawHabitat.split(/,\s*/).filter(Boolean) : [inferHabitatFromHit(hit)];
+
+  const inferredDiet = (hit.diet && hit.diet !== "Unknown") ? hit.diet : inferDietFromHit(hit);
+  const inferredActivity = (hit.activity_pattern && hit.activity_pattern !== "Unknown" ? hit.activity_pattern as Animal["activityPattern"] : inferActivityPatternFromHit(hit));
+  const inferredContinents = (hit.continents && hit.continents !== "Unknown") ? hit.continents.split(/,\s*/).filter(Boolean) as Continent[] : inferContinentsFromHit(hit);
+  const inferredStatus = (hit.conservation_status && hit.conservation_status !== "Unknown" ? hit.conservation_status as Animal["conservationStatus"] : inferConservationStatusFromHit(hit));
 
   const rawCommon = hit.common_name?.trim();
   const validCommonName = rawCommon && isLatinText(rawCommon) ? rawCommon : (hit.canonical_name || hit.scientific_name);
@@ -149,17 +162,17 @@ export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
     commonName: validCommonName,
     scientificName: hit.scientific_name,
     averageLifespanYears: null,
-    shortDescription: [hit.rank, inferredClass, hit.family].filter(Boolean).join(" | ") || "Indexed species entry ready for hydration.",
+    shortDescription: [hit.rank, inferredClass, inferredFamily].filter(Boolean).join(" | ") || "Indexed species entry ready for hydration.",
     detailedDescription: "Open this entry to hydrate its full profile from biodiversity sources.",
     coolFacts: [],
     classification: {
-      kingdom: hit.kingdom ?? "Animalia",
-      phylum: hit.phylum ?? "Chordata",
+      kingdom: inferredKingdom,
+      phylum: inferredPhylum,
       className: inferredClass,
-      order: hit.order_name ?? "",
-      family: hit.family ?? "",
-      genus: hit.genus ?? hit.canonical_name.split(" ")[0] ?? hit.canonical_name,
-      species: hit.canonical_name,
+      order: inferredOrder,
+      family: inferredFamily,
+      genus: inferredGenus,
+      species: hit.canonical_name || hit.scientific_name,
     },
     habitat: inferredHabitat,
     diet: inferredDiet,
@@ -322,7 +335,6 @@ export async function hydrateSpeciesProfile(id: string, forceRefresh = false) {
       };
 
       // Persist to localStorage so subsequent navigations are instant
-      const { setCachedSpecies } = await import("./cache");
       setCachedSpecies(wikiAnimal);
 
       return { id, gbif_taxon_key: 0, animal: wikiAnimal, cached: false, partial: true } satisfies HydratedProfileResponse;

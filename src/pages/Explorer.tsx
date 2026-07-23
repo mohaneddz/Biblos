@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { continents } from "../data/discovery";
 import { animals } from "../data/animals";
-import type { Continent } from "../types/animal";
+import type { Animal, Continent } from "../types/animal";
 import {
   AlertShieldIcon,
   BinocularsIcon,
@@ -324,19 +324,28 @@ const CONTINENT_STATS: Record<string, {
   },
 };
 
+import { getAllCachedSpecies } from "../services/cache";
+
 export default function Explorer() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedContinent = searchParams.get("continent") as Continent | null;
+
+  const allAvailableAnimals = useMemo(() => {
+    const merged = new Map<string, Animal>(animals.map((a) => [a.id, a]));
+    for (const a of getAllCachedSpecies()) merged.set(a.id, a);
+    return [...merged.values()];
+  }, []);
+
   const continentSpecies = selectedContinent
-    ? animals.filter((animal) => animal.continents.includes(selectedContinent))
+    ? allAvailableAnimals.filter((animal) => animal.continents.includes(selectedContinent))
     : [];
 
   const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
   const activeContinentName = hoveredContinent ?? selectedContinent;
   const activeContinentStats = activeContinentName ? CONTINENT_STATS[activeContinentName] ?? null : null;
   const activeContinentSpeciesCount = activeContinentName
-    ? animals.filter((animal) => animal.continents.includes(activeContinentName as Continent)).length
+    ? allAvailableAnimals.filter((animal) => animal.continents.includes(activeContinentName as Continent)).length
     : 0;
 
   const [isCollapsed, setIsCollapsed] = useState(() => {

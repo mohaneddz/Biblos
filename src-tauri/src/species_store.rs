@@ -325,6 +325,11 @@ pub fn db_path_for_app(app: Option<&AppHandle>) -> Result<PathBuf> {
         "ALTER TABLE species_index ADD COLUMN aliases TEXT",
         "ALTER TABLE species_index ADD COLUMN inat_taxon_id INTEGER",
         "ALTER TABLE species_index ADD COLUMN popularity_score REAL DEFAULT 0.0",
+        "ALTER TABLE species_index ADD COLUMN habitat TEXT",
+        "ALTER TABLE species_index ADD COLUMN diet TEXT",
+        "ALTER TABLE species_index ADD COLUMN activity_pattern TEXT",
+        "ALTER TABLE species_index ADD COLUMN conservation_status TEXT",
+        "ALTER TABLE species_index ADD COLUMN continents TEXT",
     ] {
         let _ = connection.execute(sql, []);
     }
