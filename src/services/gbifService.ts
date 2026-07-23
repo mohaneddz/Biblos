@@ -7,6 +7,19 @@ import type {
   SearchResponse,
 } from "../types/speciesStore";
 import { reportError } from "./errorReporter";
+import {
+  inferKingdomFromHit,
+  inferPhylumFromHit,
+  inferClassFromHit,
+  inferOrderFromHit,
+  inferFamilyFromHit,
+  inferGenusFromHit,
+  inferHabitatFromHit,
+  inferDietFromHit,
+  inferActivityPatternFromHit,
+  inferContinentsFromHit,
+  inferConservationStatusFromHit,
+} from "./taxonomyInference";
 
 // ── Session-level stale-while-revalidate cache (GBIF suggest results) ────────
 
@@ -405,15 +418,33 @@ export function buildSpeciesFromGbifDetails(id: string, details: GbifSpeciesDeta
   const fallbackName = cached?.commonName ?? details.vernacularName ?? details.canonicalName ?? details.scientificName ?? "Unknown species";
   const scientificName = details.scientificName ?? details.canonicalName ?? cached?.scientificName ?? fallbackName;
   const canonicalName = details.canonicalName ?? scientificName;
-  const kingdom = details.kingdom ?? cached?.classification.kingdom ?? "Animalia";
-  const phylum = details.phylum ?? cached?.classification.phylum ?? "Unknown";
-  const className = details.class ?? cached?.classification.className ?? "Unknown";
-  const order = details.order ?? cached?.classification.order ?? "Unknown";
-  const family = details.family ?? cached?.classification.family ?? "Unknown";
-  const genus = details.genus ?? cached?.classification.genus ?? "Unknown";
+
+  const hitProxy: Partial<SpeciesSearchHit> = {
+    canonical_name: canonicalName,
+    scientific_name: scientificName,
+    common_name: fallbackName,
+    kingdom: details.kingdom,
+    phylum: details.phylum,
+    class_name: details.class,
+    order_name: details.order,
+    family: details.family,
+    genus: details.genus,
+    habitat: details.habitat,
+  };
+
+  const kingdom = (details.kingdom && details.kingdom.toLowerCase() !== "unknown") ? details.kingdom : (cached?.classification.kingdom ?? inferKingdomFromHit(hitProxy));
+  const phylum = (details.phylum && details.phylum.toLowerCase() !== "unknown") ? details.phylum : (cached?.classification.phylum ?? inferPhylumFromHit(hitProxy));
+  const className = (details.class && details.class.toLowerCase() !== "unknown") ? details.class : (cached?.classification.className ?? inferClassFromHit(hitProxy));
+  const order = (details.order && details.order.toLowerCase() !== "unknown") ? details.order : (cached?.classification.order ?? inferOrderFromHit(hitProxy));
+  const family = (details.family && details.family.toLowerCase() !== "unknown") ? details.family : (cached?.classification.family ?? inferFamilyFromHit(hitProxy));
+  const genus = (details.genus && details.genus.toLowerCase() !== "unknown") ? details.genus : (cached?.classification.genus ?? inferGenusFromHit(hitProxy));
   const species = details.species ?? canonicalName;
-  const habitat = details.habitat ? [details.habitat] : cached?.habitat.length ? cached.habitat : ["Unknown"];
-  const conservationStatus = cached?.conservationStatus ?? inferConservationStatusFromGbif(details);
+
+  const habitat = details.habitat ? details.habitat.split(/,\s*/).filter(Boolean) : (cached?.habitat.length ? cached.habitat : [inferHabitatFromHit(hitProxy)]);
+  const conservationStatus = cached?.conservationStatus ?? (inferConservationStatusFromGbif(details) !== "Unknown" ? inferConservationStatusFromGbif(details) : inferConservationStatusFromHit(hitProxy));
+  const diet = cached?.diet && cached.diet !== "Unknown" ? cached.diet : inferDietFromHit(hitProxy);
+  const activityPattern = cached?.activityPattern && cached.activityPattern !== "Unknown" ? cached.activityPattern : inferActivityPatternFromHit(hitProxy);
+  const continents = cached?.continents?.length && !cached.continents.includes("Unknown") ? cached.continents : inferContinentsFromHit(hitProxy);
   const shortDescription = cached?.shortDescription ?? ([details.rank, className, family].filter(Boolean).join(" | ") || "GBIF record ready for local hydration.");
 
   return {
@@ -437,9 +468,9 @@ export function buildSpeciesFromGbifDetails(id: string, details: GbifSpeciesDeta
       species,
     },
     habitat,
-    diet: cached?.diet ?? "Unknown",
-    activityPattern: cached?.activityPattern ?? "Unknown",
-    continents: cached?.continents?.length ? cached.continents : ["Unknown"],
+    diet,
+    activityPattern,
+    continents,
     conservationStatus,
     size: cached?.size ?? {},
     weightKg: cached?.weightKg ?? null,

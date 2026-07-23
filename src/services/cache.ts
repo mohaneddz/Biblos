@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { animalMap } from "../data/animals";
 import type { Animal, AppSettings, Folder } from "../types/animal";
 
@@ -227,9 +228,7 @@ export function deleteCachedSpecies(id: string) {
 
   // Also purge from backend SQLite store if running in Tauri
   if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-    import("@tauri-apps/api/core").then(({ invoke }) => {
-      void invoke("delete_species_local", { id }).catch(() => {/* ignore */});
-    }).catch(() => {/* ignore */});
+    void invoke("delete_species_local", { id }).catch(() => {/* ignore */});
   }
 
   notifyCacheUpdated();
