@@ -2,12 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { askNaturalist, getChatSettings, type ChatSettings } from "../services/aiNaturalist";
 import { getSettings } from "../services/cache";
-import { BinocularsIcon, BrainSparkIcon } from "./icons";
+import { BinocularsIcon, BrainSparkIcon, HistoryIcon } from "./icons";
 import { animals } from "../data/animals";
 import type { Animal } from "../types/animal";
 import { marked } from "marked";
 import katex from "katex";
 import { toastService } from "../services/toastService";
+import {
+  type ChatEntry,
+  type ChatSession,
+  getChatSessions,
+  getActiveSession,
+  getActiveSessionId,
+  setActiveSessionId,
+  updateCurrentSessionMessages,
+  deleteChatSession,
+  clearAllChatSessions,
+  formatSessionTime,
+} from "../services/chatHistoryService";
 
 const promptChips = [
   "Compare the African lion and cheetah as savanna predators.",
@@ -102,12 +114,6 @@ function parseResponseAndFollowups(text: string): { content: string; followups: 
   return { content, followups: followups.slice(0, 3) };
 }
 
-type ChatEntry = {
-  role: "user" | "assistant";
-  content: string;
-  refs?: Array<{ id: string; title: string; kind: string; excerpt: string }>;
-};
-
 export function AiNaturalistPanel({
   initialPrompt = "",
   speciesName = "",
@@ -117,14 +123,35 @@ export function AiNaturalistPanel({
 }) {
   const settings = useMemo(() => getSettings(), []);
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [history, setHistory] = useState<ChatEntry[]>([]);
+  const [history, setHistory] = useState<ChatEntry[]>(() => {
+    const active = getActiveSession();
+    return active ? active.messages : [];
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>(() => getChatSessions());
+  const [historyFilter, setHistoryFilter] = useState("");
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => getChatSettings());
-  const [activeFollowups, setActiveFollowups] = useState<string[]>([]);
+  const [activeFollowups, setActiveFollowups] = useState<string[]>(() => {
+    const active = getActiveSession();
+    if (active && active.messages.length > 0) {
+      const lastAssistant = active.messages.filter((m) => m.role === "assistant").pop();
+      return lastAssistant?.followups || [];
+    }
+    return [];
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleHistoryUpdate = () => {
+      setChatSessions(getChatSessions());
+    };
+    window.addEventListener("biblos-chat-history-updated", handleHistoryUpdate);
+    return () => window.removeEventListener("biblos-chat-history-updated", handleHistoryUpdate);
+  }, []);
 
   const saveSettings = (updated: Partial<ChatSettings>) => {
     const next = { ...chatSettings, ...updated };
@@ -189,6 +216,43 @@ export function AiNaturalistPanel({
     ].join("\n");
   }, [matchedAnimal]);
 
+  function handleNewChat() {
+    setActiveSessionId(null);
+    setHistory([]);
+    setPrompt("");
+    setError("");
+    setActiveFollowups([]);
+    setShowHistory(false);
+    toastService.success("Started a new chat session.");
+  }
+
+  function handleSelectSession(session: ChatSession) {
+    setActiveSessionId(session.id);
+    setHistory(session.messages);
+    setPrompt("");
+    setError("");
+    const lastAssistant = session.messages.filter((m) => m.role === "assistant").pop();
+    setActiveFollowups(lastAssistant?.followups || []);
+    setShowHistory(false);
+    toastService.success(`Loaded chat: "${session.title}"`);
+  }
+
+  function handleDeleteSession(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    deleteChatSession(id);
+    if (getActiveSessionId() === id) {
+      handleNewChat();
+    } else {
+      toastService.info("Chat deleted.");
+    }
+  }
+
+  function handleClearAllSessions() {
+    clearAllChatSessions();
+    handleNewChat();
+    toastService.info("Cleared all chat history.");
+  }
+
   async function submit(nextPrompt: string) {
     const clean = nextPrompt.trim();
     if (!clean || busy) {
@@ -200,7 +264,11 @@ export function AiNaturalistPanel({
     setError("");
     setPrompt("");
     setActiveFollowups([]);
-    setHistory((current) => [...current, { role: "user", content: clean }]);
+
+    const userEntry: ChatEntry = { role: "user", content: clean };
+    const updatedWithUser = [...history, userEntry];
+    setHistory(updatedWithUser);
+    updateCurrentSessionMessages(updatedWithUser, speciesName);
 
     try {
       const response = await askNaturalist({
@@ -212,25 +280,27 @@ export function AiNaturalistPanel({
       });
 
       const parsed = parseResponseAndFollowups(response.answer);
+      const assistantEntry: ChatEntry = {
+        role: "assistant",
+        content: parsed.content,
+        refs: response.contextHits.map((hit) => ({
+          id: hit.id,
+          title: hit.title,
+          kind: hit.kind,
+          excerpt: hit.excerpt,
+        })),
+        followups: parsed.followups,
+      };
 
-      setHistory((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content: parsed.content,
-          refs: response.contextHits.map((hit) => ({
-            id: hit.id,
-            title: hit.title,
-            kind: hit.kind,
-            excerpt: hit.excerpt,
-          })),
-        },
-      ]);
+      const updatedFull = [...updatedWithUser, assistantEntry];
+      setHistory(updatedFull);
       setActiveFollowups(parsed.followups);
+      updateCurrentSessionMessages(updatedFull, speciesName);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to reach AI Naturalist.");
       setPrompt(previousPrompt);
-      setHistory((current) => current.slice(0, -1));
+      setHistory(history);
+      updateCurrentSessionMessages(history, speciesName);
     } finally {
       setBusy(false);
     }
@@ -263,38 +333,47 @@ export function AiNaturalistPanel({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {history.length > 0 && (
-            <>
-              {/* New Chat Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setHistory([]);
-                  setError("");
-                  setPrompt("");
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-app-soft hover:bg-white/[0.06] hover:text-white transition cursor-pointer"
-                title="New Chat"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
+          {/* New Chat Button */}
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-app-soft hover:bg-white/[0.06] hover:text-white transition cursor-pointer"
+            title="New Chat"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
 
-              {/* Copy Transcript Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const text = history
-                    .map((entry) => `${entry.role === "user" ? "You" : "AI Naturalist"}:\n${entry.content}`)
-                    .join("\n\n");
-                  void navigator.clipboard.writeText(text);
-                  toastService.success("Transcript copied to clipboard!");
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-app-soft hover:bg-white/[0.06] hover:text-white transition cursor-pointer"
-                title="Copy Transcript"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              </button>
-            </>
+          {/* History Button */}
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-app-soft hover:bg-white/[0.06] hover:text-white transition cursor-pointer"
+            title="Chat History"
+          >
+            <HistoryIcon className="h-4 w-4" />
+            {chatSessions.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-app-accent px-1 text-[9px] font-bold text-black shadow-sm">
+                {chatSessions.length > 99 ? "99+" : chatSessions.length}
+              </span>
+            )}
+          </button>
+
+          {history.length > 0 && (
+            /* Copy Transcript Button */
+            <button
+              type="button"
+              onClick={() => {
+                const text = history
+                  .map((entry) => `${entry.role === "user" ? "You" : "AI Naturalist"}:\n${entry.content}`)
+                  .join("\n\n");
+                void navigator.clipboard.writeText(text);
+                toastService.success("Transcript copied to clipboard!");
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-app-soft hover:bg-white/[0.06] hover:text-white transition cursor-pointer"
+              title="Copy Transcript"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
           )}
 
           {/* Chat Settings Button */}
@@ -676,6 +755,159 @@ export function AiNaturalistPanel({
                 onClick={() => setShowSettings(false)}
               >
                 Close Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat History Modal */}
+      {showHistory && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-[6px] p-4 animate-fade-in"
+          onClick={() => setShowHistory(false)}
+        >
+          <div
+            className="w-full max-w-xl max-h-[85vh] overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(20,25,22,0.98),rgba(10,13,11,0.98))] p-6 shadow-2xl animate-zoom-in flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <HistoryIcon className="h-5 w-5 text-app-accent" />
+                <h2 className="text-lg font-semibold text-white tracking-wide flex items-center gap-2">
+                  Chat History
+                  <span className="text-xs rounded-full bg-white/10 px-2 py-0.5 text-app-soft font-normal">
+                    {chatSessions.length}
+                  </span>
+                </h2>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  className="bg-app-accent/15 hover:bg-app-accent/25 text-app-accent border border-app-accent/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  New Chat
+                </button>
+                {chatSessions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllSessions}
+                    className="text-xs text-app-muted hover:text-red-400 transition cursor-pointer select-none"
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(false)}
+                  className="text-app-soft hover:text-white transition cursor-pointer text-lg font-medium ml-1 select-none"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Search */}
+            {chatSessions.length > 2 && (
+              <div className="mt-3 shrink-0">
+                <input
+                  type="text"
+                  placeholder="Search past conversations..."
+                  value={historyFilter}
+                  onChange={(e) => setHistoryFilter(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-app-soft focus:outline-none focus:border-app-accent/40"
+                />
+              </div>
+            )}
+
+            {/* Session List */}
+            <div className="mt-4 overflow-y-auto space-y-2 flex-1 pr-1 scrollbar-thin">
+              {chatSessions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-3">
+                    <HistoryIcon className="h-5 w-5 text-app-soft" />
+                  </div>
+                  <p className="text-sm font-medium text-white">No chat history yet</p>
+                  <p className="text-xs text-app-muted mt-1 max-w-xs leading-relaxed">
+                    Ask AI Naturalist a question to start saving your conversations automatically.
+                  </p>
+                </div>
+              ) : (
+                chatSessions
+                  .filter((s) => {
+                    if (!historyFilter.trim()) return true;
+                    const q = historyFilter.trim().toLowerCase();
+                    return (
+                      s.title.toLowerCase().includes(q) ||
+                      s.messages.some((m) => m.content.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((session) => {
+                    const isActive = getActiveSessionId() === session.id;
+                    const lastMsg = session.messages[session.messages.length - 1]?.content || "";
+                    const cleanPreview = lastMsg.replace(/[#*`]/g, "").slice(0, 90);
+
+                    return (
+                      <div
+                        key={session.id}
+                        onClick={() => handleSelectSession(session)}
+                        className={`group relative rounded-xl border p-3.5 transition cursor-pointer flex items-center justify-between gap-3 ${
+                          isActive
+                            ? "border-app-accent/40 bg-app-accent/10 shadow-sm"
+                            : "border-white/8 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/15"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-semibold text-white truncate block">
+                              {session.title || "Untitled Chat"}
+                            </span>
+                            {isActive && (
+                              <span className="text-[9px] uppercase tracking-wider font-bold bg-app-accent/20 text-app-accent px-2 py-0.5 rounded-full border border-app-accent/30 shrink-0">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          {cleanPreview && (
+                            <p className="text-xs text-app-muted truncate">
+                              {cleanPreview}...
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-1.5 text-[10px] text-app-soft">
+                            <span>{formatSessionTime(session.updatedAt)}</span>
+                            <span>•</span>
+                            <span>{session.messages.length} message{session.messages.length === 1 ? "" : "s"}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSession(session.id, e)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 p-1.5 text-app-soft hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-white/10 cursor-pointer"
+                            title="Delete Chat"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-4 pt-3 border-t border-white/10 flex justify-between items-center text-xs text-app-muted shrink-0">
+              <span>Saved locally in Biblos</span>
+              <button
+                type="button"
+                className="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-1.5 rounded-xl transition cursor-pointer"
+                onClick={() => setShowHistory(false)}
+              >
+                Close
               </button>
             </div>
           </div>
