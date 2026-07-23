@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { CloseIcon, MaximizeIcon, MinimizeIcon } from "./icons";
 
 async function runWindowAction(action: "minimize" | "toggleMaximize" | "close") {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return;
+  }
   try {
     const appWindow = getCurrentWindow();
     await appWindow[action]();

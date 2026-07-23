@@ -172,7 +172,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
 
           <button
             type="button"
-            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-sm transition hover:border-app-accent/50 hover:bg-black/65 hover:text-app-accent disabled:cursor-wait disabled:opacity-70"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-sm transition hover:border-app-accent/50 hover:bg-black/65 hover:text-app-accent disabled:cursor-wait disabled:opacity-70 cursor-pointer"
             onClick={handleRefreshImage}
             disabled={imageRefreshing}
             title="Show another cover image"
