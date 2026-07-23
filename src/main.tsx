@@ -7,7 +7,7 @@ import "./styles.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <HashRouter>
-    <App />
+      <App />
     </HashRouter>
   </React.StrictMode>,
 );

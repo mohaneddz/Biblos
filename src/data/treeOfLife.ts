@@ -129,6 +129,7 @@ const staticLifeTree: TreeNode = {
           description: "Photosynthetic multicellular organisms that anchor most terrestrial food webs.",
           wikiTitle: "Plant",
           icon: "leaf",
+          scope: { kingdom: "Plantae" },
           children: [
             {
               id: "bryophyta",
@@ -171,6 +172,7 @@ const staticLifeTree: TreeNode = {
           description: "Absorptive heterotrophs that drive decomposition, symbiosis, and disease ecology.",
           wikiTitle: "Fungus",
           icon: "fungi",
+          scope: { kingdom: "Fungi" },
           children: [
             {
               id: "ascomycota",
@@ -231,6 +233,7 @@ const staticLifeTree: TreeNode = {
           description: "Multicellular animals spanning vertebrates, mollusks, arthropods, and many other body plans.",
           wikiTitle: "Animal",
           icon: "animal",
+          scope: { kingdom: "Animalia" },
           children: [
             {
               id: "chordata",
@@ -442,6 +445,7 @@ const staticLifeTree: TreeNode = {
               description: "Insects, spiders, crustaceans, and the largest animal phylum by species.",
               wikiTitle: "Arthropod",
               icon: "invertebrate",
+              scope: { phylum: "Arthropoda" },
             },
             {
               id: "cnidaria",
@@ -450,6 +454,7 @@ const staticLifeTree: TreeNode = {
               description: "Jellyfish, corals, and sea anemones with stinging cells.",
               wikiTitle: "Cnidaria",
               icon: "marine",
+              scope: { phylum: "Cnidaria" },
             },
           ],
         },
