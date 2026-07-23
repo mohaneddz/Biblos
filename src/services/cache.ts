@@ -218,12 +218,20 @@ export function deleteCachedSpecies(id: string) {
     const recs = getRecentlyViewedIds().filter((item) => item !== id);
     writeJson(RECENTS_KEY, recs);
 
-    // Optimistically add to hidden species so it disappears instantly from all views
+    // Add to hidden species list so it vanishes from all directory views instantly
     const currentHidden = getHiddenSpecies();
     if (!currentHidden.includes(id)) {
       writeJson(HIDDEN_KEY, [...currentHidden, id]);
     }
   }
+
+  // Also purge from backend SQLite store if running in Tauri
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      void invoke("delete_species_local", { id }).catch(() => {/* ignore */});
+    }).catch(() => {/* ignore */});
+  }
+
   notifyCacheUpdated();
 }
 

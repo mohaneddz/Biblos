@@ -71,27 +71,65 @@ export default function Species() {
 
   const useIndexedSearch = filters.query.trim().length > 0;
 
+  const hiddenSet = useMemo(() => new Set(getHiddenSpecies()), [storageVersion]);
+
+  /** Determine if user explicitly requested non-animals (Plantae, Fungi, etc.) via filters */
+  const isNonAnimalExplicit = useMemo(() => {
+    const k = (filters.kingdom || "").toLowerCase().trim();
+    const c = (filters.className || "").toLowerCase().trim();
+    return (
+      (k !== "" && k !== "animalia") ||
+      ["plantae", "fungi", "bacteria", "archaea", "chromista", "viruses"].includes(k) ||
+      ["magnoliopsida", "liliopsida", "pinopsida", "bryopsida", "agaricomycetes", "pezizomycetes"].includes(c)
+    );
+  }, [filters.kingdom, filters.className]);
+
+  const isAnimal = (animal: Animal) => {
+    const k = (animal.classification?.kingdom || "Animalia").toLowerCase().trim();
+    const NON_ANIMAL_KINGDOMS = new Set(["plantae", "fungi", "chromista", "bacteria", "archaea", "viruses"]);
+    if (NON_ANIMAL_KINGDOMS.has(k)) {
+      return false;
+    }
+    const c = (animal.classification?.className || "").toLowerCase().trim();
+    const NON_ANIMAL_CLASSES = new Set([
+      "magnoliopsida", "liliopsida", "pinopsida", "bryopsida", "polypodiopsida",
+      "agaricomycetes", "pezizomycetes", "bacilli", "gammaproteobacteria"
+    ]);
+    if (NON_ANIMAL_CLASSES.has(c)) {
+      return false;
+    }
+    return true;
+  };
+
   const allAvailableAnimals = useMemo(() => {
     const cached = getAllCachedSpecies();
-    const hidden = getHiddenSpecies();
     const map = new Map<string, Animal>();
     for (const animal of animals) {
-      if (!hidden.includes(animal.id)) {
+      if (!hiddenSet.has(animal.id) && (isNonAnimalExplicit || isAnimal(animal))) {
         map.set(animal.id, animal);
       }
     }
     for (const animal of cached) {
-      if (!hidden.includes(animal.id)) {
+      if (!hiddenSet.has(animal.id) && (isNonAnimalExplicit || isAnimal(animal))) {
         map.set(animal.id, animal);
       }
     }
     return [...map.values()];
-  }, [storageVersion]);
+  }, [storageVersion, hiddenSet, isNonAnimalExplicit]);
 
   const browseResults = useMemo(() => searchAnimals(allAvailableAnimals, filters), [allAvailableAnimals, filters]);
-  const indexedResults = useMemo(() => indexedHits.map(previewAnimalFromHit), [indexedHits]);
-  const inatResults = useMemo(() => inatHits.map(previewAnimalFromHit), [inatHits]);
-  const filterDiscoveryResults = useMemo(() => filterDiscoveryHits.map(previewAnimalFromHit), [filterDiscoveryHits]);
+  const indexedResults = useMemo(
+    () => indexedHits.map(previewAnimalFromHit).filter((a) => !hiddenSet.has(a.id) && (isNonAnimalExplicit || isAnimal(a))),
+    [indexedHits, hiddenSet, isNonAnimalExplicit]
+  );
+  const inatResults = useMemo(
+    () => inatHits.map(previewAnimalFromHit).filter((a) => !hiddenSet.has(a.id) && (isNonAnimalExplicit || isAnimal(a))),
+    [inatHits, hiddenSet, isNonAnimalExplicit]
+  );
+  const filterDiscoveryResults = useMemo(
+    () => filterDiscoveryHits.map(previewAnimalFromHit).filter((a) => !hiddenSet.has(a.id) && (isNonAnimalExplicit || isAnimal(a))),
+    [filterDiscoveryHits, hiddenSet, isNonAnimalExplicit]
+  );
 
   /**
    * Merge all result sources using Reciprocal Rank Fusion.
@@ -155,12 +193,13 @@ export default function Species() {
         const localAnimal =
           allAvailableAnimals.find((a) => a.id === hit.id) ?? null;
         const animal = localAnimal ?? previewAnimalFromHit(hit);
-
-        // Profile richness tiebreaker: if a local rich profile exists, use it
         rawResults.push(animal);
       }
 
-      return searchAnimals(rawResults, { ...filters, query: "" });
+      const finalResults = rawResults.filter(
+        (a) => !hiddenSet.has(a.id) && (isNonAnimalExplicit || isAnimal(a))
+      );
+      return searchAnimals(finalResults, { ...filters, query: "" });
     } else {
       // Browse mode (no text query) — combine indexed database species for this page + static/cached animals
       const seenIds = new Set<string>();
@@ -197,7 +236,10 @@ export default function Species() {
         if (comLower) seenNames.add(comLower);
       }
 
-      return searchAnimals(rawResults, { ...filters, query: "" });
+      const finalResults = rawResults.filter(
+        (a) => !hiddenSet.has(a.id) && (isNonAnimalExplicit || isAnimal(a))
+      );
+      return searchAnimals(finalResults, { ...filters, query: "" });
     }
   }, [
     useIndexedSearch,
