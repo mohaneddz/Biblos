@@ -1,8 +1,19 @@
 import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../types/animal";
 
+const CLASS_ALIASES: Record<string, string[]> = {
+  reptilia: ["reptilia", "squamata", "testudines", "crocodylia"],
+};
+
 export type AnimalSearchFilters = {
   query: string;
   className: string;
+  kingdom?: string;
+  phylum?: string;
+  order?: string;
+  family?: string;
+  genus?: string;
+  species?: string;
+  taxon?: string;
   habitat: string;
   diet: string;
   activityPattern: ActivityPattern | "";
@@ -87,6 +98,16 @@ export function searchAnimals(animals: Animal[], filters: AnimalSearchFilters) {
   const habitatFilter = filters.habitat ? normalize(filters.habitat) : "";
   const dietFilter = filters.diet ? normalize(filters.diet) : "";
   const classFilter = filters.className ? normalize(filters.className) : "";
+  const taxonFilter = filters.taxon ? normalize(filters.taxon) : "";
+  const taxonomyFilters = [
+    ["kingdom", filters.kingdom],
+    ["phylum", filters.phylum],
+    ["className", filters.className],
+    ["order", filters.order],
+    ["family", filters.family],
+    ["genus", filters.genus],
+    ["species", filters.species],
+  ] as const;
 
   return animals
     .filter((animal) => {
@@ -96,7 +117,18 @@ export function searchAnimals(animals: Animal[], filters: AnimalSearchFilters) {
       // Fuzzy class match: "mammal" matches "Mammalia"
       if (classFilter) {
         const animalClass = normalize(animal.classification.className);
-        if (!animalClass.includes(classFilter) && !classFilter.includes(animalClass)) return false;
+        const acceptedClasses = CLASS_ALIASES[classFilter] ?? [classFilter];
+        if (!acceptedClasses.some((acceptedClass) => animalClass.includes(acceptedClass) || acceptedClass.includes(animalClass))) return false;
+      }
+      for (const [key, value] of taxonomyFilters) {
+        if (key === "className" || !value) continue;
+        const taxonomyValue = normalize(animal.classification[key]);
+        const taxonomyFilter = normalize(value);
+        if (!taxonomyValue.includes(taxonomyFilter) && !taxonomyFilter.includes(taxonomyValue)) return false;
+      }
+      if (taxonFilter) {
+        const classification = Object.values(animal.classification).map(normalize).join(" ");
+        if (!classification.includes(taxonFilter)) return false;
       }
       // Fuzzy habitat match: "forest" matches "Tropical rainforest canopy"
       if (habitatFilter) {

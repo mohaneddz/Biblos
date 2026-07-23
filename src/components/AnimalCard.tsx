@@ -11,12 +11,13 @@ import {
   hideSpecies,
   getCachedSpecies,
 } from "../services/cache";
-import { BookmarkSolidIcon, HeartSolidIcon, HeartIcon, BookmarkIcon, FolderIcon } from "./icons";
+import { BookmarkSolidIcon, HeartSolidIcon, HeartIcon, BookmarkIcon, FolderIcon, RefreshIcon } from "./icons";
 import { toastService } from "../services/toastService";
 import { confirmService } from "../services/confirmService";
 import { hydrateSpeciesWithAI } from "../services/speciesStore";
 import { reportError } from "../services/errorReporter";
 import { AddToFolderModal } from "./AddToFolderModal";
+import { getSpeciesMedia } from "../services/speciesMedia";
 
 type AnimalCardProps = {
   animal: Animal;
@@ -28,6 +29,44 @@ export function AnimalCard({ animal }: AnimalCardProps) {
   const isCached = animal.id.startsWith("gbif-") || getCachedSpecies(animal.id) !== null;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(animal.heroImage ?? animal.images[0] ?? null);
+  const [imageCandidates, setImageCandidates] = useState<string[]>(() => [
+    ...(animal.heroImage ? [animal.heroImage] : []),
+    ...animal.images,
+  ]);
+  const [imageRefreshing, setImageRefreshing] = useState(false);
+
+  const handleRefreshImage = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (imageRefreshing) return;
+
+    setImageRefreshing(true);
+    try {
+      const media = await getSpeciesMedia(animal, "full");
+      const fetchedImages = [
+        ...(media.primary ? [media.primary.url] : []),
+        ...media.gallery.map((asset) => asset.url),
+      ];
+      const candidates = [...new Set([...imageCandidates, ...fetchedImages])];
+      const current = selectedImage ?? candidates[0] ?? null;
+      const currentIndex = current ? candidates.indexOf(current) : -1;
+      const next = candidates.length > 1
+        ? candidates[(currentIndex + 1 + candidates.length) % candidates.length]
+        : null;
+
+      setImageCandidates(candidates);
+      if (next && next !== current) {
+        setSelectedImage(next);
+      } else {
+        toastService.info(`No alternate image available for ${animal.commonName}`);
+      }
+    } catch (error) {
+      reportError(`Failed to refresh image for "${animal.commonName}"`, error);
+    } finally {
+      setImageRefreshing(false);
+    }
+  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -117,10 +156,22 @@ export function AnimalCard({ animal }: AnimalCardProps) {
         <div className="relative h-[13rem] overflow-hidden border-b border-white/8">
           <SpeciesImage
             animal={animal}
+            imageUrl={selectedImage}
             className="h-full w-full"
             fitClassName="h-full w-full object-cover transition duration-500"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,5,0.02),rgba(3,6,5,0.82))]" />
+
+          <button
+            type="button"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-sm transition hover:border-app-accent/50 hover:bg-black/65 hover:text-app-accent disabled:cursor-wait disabled:opacity-70"
+            onClick={handleRefreshImage}
+            disabled={imageRefreshing}
+            title="Show another cover image"
+            aria-label={`Show another cover image for ${animal.commonName}`}
+          >
+            <RefreshIcon className={imageRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+          </button>
 
 
           <div className="absolute inset-x-0 bottom-0 p-5">
@@ -133,7 +184,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
           </div>
         </div>
         <div className="flex flex-1 flex-col gap-4 p-5">
-          <p className="text-sm leading-7 text-app-muted">{animal.shortDescription}</p>
+          <p className="line-clamp-3 text-sm leading-7 text-app-muted">{animal.shortDescription}</p>
           {animal.habitat.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {animal.habitat.slice(0, 3).map((item) => (

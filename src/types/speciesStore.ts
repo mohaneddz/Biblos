@@ -13,6 +13,11 @@ export type SpeciesSearchHit = {
   order_name: string | null;
   family: string | null;
   genus: string | null;
+  habitat?: string | null;
+  diet?: string | null;
+  activity_pattern?: string | null;
+  conservation_status?: string | null;
+  continents?: string | null;
   /** Comma-separated synonym / alternate vernacular names stored in the index */
   aliases?: string[];
   /** iNaturalist taxon ID — set when the hit was resolved via iNaturalist */
