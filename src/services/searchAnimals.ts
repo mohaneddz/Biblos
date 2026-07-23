@@ -2,6 +2,10 @@ import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../
 
 const CLASS_ALIASES: Record<string, string[]> = {
   reptilia: ["reptilia", "squamata", "testudines", "crocodylia"],
+  archaea: ["archaea", "euryarchaeota", "thermoproteota", "asgardarchaeota", "halobacteria", "methanococci", "thermococci", "lokiarchaeia"],
+  bacteria: ["bacteria", "pseudomonadota", "bacillota", "actinomycetota", "cyanobacteriota", "bacilli", "gammaproteobacteria", "alphaproteobacteria"],
+  fungi: ["fungi", "ascomycota", "basidiomycota", "pezizomycetes", "agaricomycetes"],
+  plantae: ["plantae", "bryophyta", "pteridophyta", "pinophyta", "magnoliophyta", "gymnosperms", "angiosperms"],
 };
 
 export type AnimalSearchFilters = {
@@ -114,17 +118,24 @@ export function searchAnimals(animals: Animal[], filters: AnimalSearchFilters) {
       if (query && !animalHaystack(animal).includes(query)) {
         return false;
       }
-      // Fuzzy class match: "mammal" matches "Mammalia"
+      // Fuzzy class & taxonomy match: check all taxonomy fields (kingdom, phylum, className, order, family, genus)
       if (classFilter) {
-        const animalClass = normalize(animal.classification.className);
         const acceptedClasses = CLASS_ALIASES[classFilter] ?? [classFilter];
-        if (!acceptedClasses.some((acceptedClass) => animalClass.includes(acceptedClass) || acceptedClass.includes(animalClass))) return false;
+        const taxonomyValues = Object.values(animal.classification).filter(Boolean).map(normalize);
+        const matchesClass = acceptedClasses.some((acceptedClass) =>
+          taxonomyValues.some((val) => val.includes(acceptedClass) || acceptedClass.includes(val))
+        );
+        if (!matchesClass) return false;
       }
       for (const [key, value] of taxonomyFilters) {
         if (key === "className" || !value) continue;
-        const taxonomyValue = normalize(animal.classification[key]);
+        const taxonomyValue = normalize(animal.classification[key] || "");
         const taxonomyFilter = normalize(value);
-        if (!taxonomyValue.includes(taxonomyFilter) && !taxonomyFilter.includes(taxonomyValue)) return false;
+        if (!taxonomyValue.includes(taxonomyFilter) && !taxonomyFilter.includes(taxonomyValue)) {
+          // Also check across all taxonomy fields if exact key match fails
+          const allTaxonomy = Object.values(animal.classification).filter(Boolean).map(normalize).join(" ");
+          if (!allTaxonomy.includes(taxonomyFilter)) return false;
+        }
       }
       if (taxonFilter) {
         const classification = Object.values(animal.classification).map(normalize).join(" ");
