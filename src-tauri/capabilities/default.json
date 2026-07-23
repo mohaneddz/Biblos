@@ -34,15 +34,6 @@
           "path": "**"
         }
       ]
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "python/example",
-          "sidecar": true
-        }
-      ]
     }
   ]
 }
