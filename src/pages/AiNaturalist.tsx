@@ -24,8 +24,8 @@ export default function AiNaturalist() {
   };
 
   return (
-    <div className="page-frame h-full min-h-0 flex flex-col">
-      <section className="page-card rounded-[1.75rem] p-6 transition-all duration-300 ease-in-out shrink-0">
+    <div className="p-4 md:p-6 h-full min-h-0 flex flex-col gap-4 overflow-hidden">
+      <section className="page-card rounded-[1.75rem] p-6 transition-all duration-300 ease-in-out shrink-0 flex-none">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h1 className="page-title select-none">AI Naturalist</h1>

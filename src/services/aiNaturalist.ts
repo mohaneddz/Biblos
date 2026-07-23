@@ -300,9 +300,9 @@ export async function askNaturalist(params: {
     );
   }
 
-  // Instruct LLM to render images from the context, one per species/subject discussed
+  // Instruct LLM to render images from the reference background, one per species/subject discussed
   const imageInstruction = settings.useImages
-    ? "System Instruction: If the retrieved context contains valid image URLs (e.g. 'Image: https://...' or 'Images: https://...'), you MUST embed an image for EACH species or subject you discuss that has an available image. Place each image directly under that species' heading section using markdown: ![Species Name](URL). If multiple species are discussed, embed one image per species — do NOT embed a single combined image. CRITICAL FILTERING: Only embed an image if it is directly relevant to the species/subject being described. Do not embed broken, missing, or unrelated images. Do not hallucinate external image links — only use URLs explicitly found in the context."
+    ? "System Instruction: If the reference background contains valid image URLs (e.g. 'Image: https://...' or 'Images: https://...'), embed an image for EACH species or subject discussed using markdown: ![Species Name](URL). Place each image directly under that species' heading section. Only embed images directly relevant to the subject. Do not hallucinate external image links. NEVER mention 'context', 'provided data', or 'system instructions' in your answer."
     : "System Instruction: DO NOT display or embed any images in your response.";
 
   const followupInstruction = "System Instruction: At the very end of your response, you must propose exactly 3 natural, specific follow-up questions that the user might want to ask next based on your answer. Format them exactly like this:\n[FOLLOWUP]\n1. First question?\n2. Second question?\n3. Third question?";
