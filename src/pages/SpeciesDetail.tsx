@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { AnimalCard } from "../components/AnimalCard";
 import { ClassificationTree } from "../components/ClassificationTree";
 import { FactGrid } from "../components/FactGrid";
 import { SpeciesHero } from "../components/SpeciesHero";
 import { useSpeciesMedia } from "../hooks/useSpeciesMedia";
 import { clearAnimalMediaCache } from "../services/speciesMedia";
-import { animalMap } from "../data/animals";
+import { animalMap, animals } from "../data/animals";
 import { findMatchingEcosystem } from "../data/ecosystems";
-import { getFavorites, getBookmarkedSpecies, getCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite, deleteSpeciesRecordOnly, getSectionStates, saveSectionStates } from "../services/cache";
-import { hydrateSpeciesProfile, hydrateSpeciesWithAI } from "../services/speciesStore";
+import { getFavorites, getBookmarkedSpecies, getCachedSpecies, getAllCachedSpecies, pushRecentlyViewed, setCachedSpecies, toggleBookmark, toggleFavorite, deleteSpeciesRecordOnly, getSectionStates, saveSectionStates } from "../services/cache";
+import { hydrateSpeciesProfile, hydrateSpeciesWithAI, searchSpeciesLocal, previewAnimalFromHit } from "../services/speciesStore";
 import { searchSpeciesVideos } from "../services/youtubeService";
 import type { Animal, SpeciesVideo } from "../types/animal";
 import { toastService } from "../services/toastService";
@@ -114,14 +115,6 @@ function SpeciesDetailSkeleton() {
 
         <div className="grid gap-4">
           <div className="page-card rounded-[1.5rem] p-5 space-y-3">
-            <div className="h-5 w-28 bg-white/15 animate-pulse rounded" />
-            <div className="space-y-2 pt-2">
-              <div className="h-4 bg-white/10 animate-pulse rounded w-full" />
-              <div className="h-4 bg-white/10 animate-pulse rounded w-11/12" />
-              <div className="h-4 bg-white/10 animate-pulse rounded w-3/4" />
-            </div>
-          </div>
-          <div className="page-card rounded-[1.5rem] p-5 space-y-3">
             <div className="h-5 w-32 bg-white/15 animate-pulse rounded" />
             <div className="space-y-2 pt-2">
               <div className="h-10 bg-white/5 animate-pulse rounded-[1.2rem] w-full" />
@@ -142,6 +135,80 @@ function SpeciesDetailSkeleton() {
       </section>
     </div>
   );
+}
+
+async function fetchSimilarSpecies(currentAnimal: Animal): Promise<Animal[]> {
+  const currentId = currentAnimal.id;
+  const currentClass = currentAnimal.classification?.className?.toLowerCase() ?? "";
+  const currentOrder = currentAnimal.classification?.order?.toLowerCase() ?? "";
+  const currentFamily = currentAnimal.classification?.family?.toLowerCase() ?? "";
+  const currentGenus = currentAnimal.classification?.genus?.toLowerCase() ?? "";
+  const currentDiet = currentAnimal.diet?.toLowerCase() ?? "";
+  const currentHabitats = new Set((currentAnimal.habitat ?? []).map((h) => h.toLowerCase()));
+  const currentContinents = new Set((currentAnimal.continents ?? []).map((c) => c.toLowerCase()));
+
+  const staticList = animals;
+  const cachedList = getAllCachedSpecies();
+
+  let dbHits: Animal[] = [];
+  try {
+    const queryTerm = currentFamily || currentOrder || currentClass || currentAnimal.commonName;
+    if (queryTerm && queryTerm.toLowerCase() !== "unknown") {
+      const searchRes = await searchSpeciesLocal(queryTerm, 40);
+      dbHits = searchRes.hits.map(previewAnimalFromHit);
+    }
+  } catch (err) {
+    console.debug("Local search for similar species failed", err);
+  }
+
+  const candidateMap = new Map<string, Animal>();
+  [...staticList, ...cachedList, ...dbHits].forEach((a) => {
+    if (a && a.id && a.id !== currentId && !candidateMap.has(a.id)) {
+      candidateMap.set(a.id, a);
+    }
+  });
+
+  const candidates = Array.from(candidateMap.values());
+
+  const scored = candidates.map((cand) => {
+    let score = 0;
+    const cClass = cand.classification?.className?.toLowerCase() ?? "";
+    const cOrder = cand.classification?.order?.toLowerCase() ?? "";
+    const cFamily = cand.classification?.family?.toLowerCase() ?? "";
+    const cGenus = cand.classification?.genus?.toLowerCase() ?? "";
+    const cDiet = cand.diet?.toLowerCase() ?? "";
+
+    if (cGenus && currentGenus && cGenus === currentGenus) score += 100;
+    if (cFamily && currentFamily && cFamily === currentFamily) score += 50;
+    if (cOrder && currentOrder && cOrder === currentOrder) score += 25;
+    if (cClass && currentClass && cClass === currentClass) score += 10;
+    if (cDiet && currentDiet && cDiet === currentDiet) score += 5;
+
+    if (cand.habitat) {
+      cand.habitat.forEach((h) => {
+        if (currentHabitats.has(h.toLowerCase())) score += 3;
+      });
+    }
+
+    if (cand.continents) {
+      cand.continents.forEach((c) => {
+        if (currentContinents.has(c.toLowerCase())) score += 3;
+      });
+    }
+
+    return { animal: cand, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  let result = scored.filter((s) => s.score > 0).map((s) => s.animal);
+
+  if (result.length < 6) {
+    const remaining = staticList.filter((a) => a.id !== currentId && !result.some((r) => r.id === a.id));
+    result = [...result, ...remaining];
+  }
+
+  return result;
 }
 
 export default function SpeciesDetail() {
@@ -179,6 +246,56 @@ export default function SpeciesDetail() {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [localVideos, setLocalVideos] = useState<SpeciesVideo[]>(() => animal?.videos ?? []);
   const [loadingVideos, setLoadingVideos] = useState(false);
+
+  const [similarSpecies, setSimilarSpecies] = useState<Animal[]>([]);
+  const [similarIndex, setSimilarIndex] = useState(0);
+  const [loadingSimilar, setLoadingSimilar] = useState(true);
+
+  useEffect(() => {
+    if (!animal) return;
+    let active = true;
+    setLoadingSimilar(true);
+    setSimilarIndex(0);
+
+    fetchSimilarSpecies(animal)
+      .then((list) => {
+        if (active) {
+          setSimilarSpecies(list);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load similar species", err);
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingSimilar(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [animal]);
+
+  const handleNextSimilar = () => {
+    if (similarSpecies.length === 0) return;
+    setSimilarIndex((prev) => (prev + 3) % similarSpecies.length);
+  };
+
+  const handlePrevSimilar = () => {
+    if (similarSpecies.length === 0) return;
+    setSimilarIndex((prev) => (prev - 3 + similarSpecies.length) % similarSpecies.length);
+  };
+
+  const visibleSimilarSpecies = useMemo(() => {
+    if (similarSpecies.length === 0) return [];
+    if (similarSpecies.length <= 3) return similarSpecies;
+    const res: Animal[] = [];
+    for (let i = 0; i < 3; i++) {
+      res.push(similarSpecies[(similarIndex + i) % similarSpecies.length]);
+    }
+    return res;
+  }, [similarSpecies, similarIndex]);
 
   useEffect(() => {
     setLocalVideos(animal?.videos ?? []);
@@ -790,6 +907,71 @@ export default function SpeciesDetail() {
               </div>
             )}
           </div>
+        )}
+      </section>
+
+      {/* Similar Species Section */}
+      <section className="page-card rounded-[1.5rem] p-5 md:p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/8 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-app-accent/30 bg-app-accent/10">
+              <CompassIcon className="h-4.5 w-4.5 text-app-accent" />
+            </div>
+            <div>
+              <h2 className="page-section-title text-xl font-semibold text-white mb-0">
+                Similar Species
+              </h2>
+              <p className="text-xs text-app-muted mt-0.5">
+                Explore related wildlife sharing taxonomic traits, diet, or habitat
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {similarSpecies.length > 0 && (
+              <span className="text-xs font-medium text-app-soft/85">
+                {similarIndex + 1}–{Math.min(similarIndex + 3, similarSpecies.length)} of {similarSpecies.length}
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handlePrevSimilar}
+                disabled={similarSpecies.length <= 3}
+                className="flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-app-accent disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                title="Previous 3 species"
+                aria-label="Previous 3 species"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNextSimilar}
+                disabled={similarSpecies.length <= 3}
+                className="flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-app-accent disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                title="Next 3 species"
+                aria-label="Next 3 species"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {loadingSimilar ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-[1.65rem] border border-white/8 bg-white/5 animate-pulse h-[22rem]" />
+            ))}
+          </div>
+        ) : visibleSimilarSpecies.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {visibleSimilarSpecies.map((item) => (
+              <AnimalCard key={item.id} animal={item} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-app-muted py-4 text-center">No similar species found.</p>
         )}
       </section>
 
