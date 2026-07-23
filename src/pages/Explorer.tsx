@@ -143,7 +143,7 @@ const DIET_CARDS = [
     label: "Piscivore",
     desc: "Fish-eating hunters",
     icon: MarineIcon,
-    imageUrl: "https://images.unsplash.com/photo-1516683011827-46882a229ad5?auto=format&fit=crop&w=800&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1551085254-e96b210df58a?auto=format&fit=crop&w=1200&q=80",
   },
   {
     key: "filter feeder",
@@ -210,7 +210,7 @@ const CONSERVATION_CARDS = [
     label: "Extinct",
     desc: "No remaining individuals",
     icon: ShieldIcon,
-    imageUrl: "https://images.unsplash.com/photo-1569742918414-0498b584d412?auto=format&fit=crop&w=800&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80",
   },
 ];
 
@@ -327,13 +327,17 @@ const CONTINENT_STATS: Record<string, {
 export default function Explorer() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedContinent = (searchParams.get("continent") as Continent | null) ?? "Africa";
-  const continentSpecies = animals.filter((animal) => animal.continents.includes(selectedContinent));
+  const selectedContinent = searchParams.get("continent") as Continent | null;
+  const continentSpecies = selectedContinent
+    ? animals.filter((animal) => animal.continents.includes(selectedContinent))
+    : [];
 
   const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
   const activeContinentName = hoveredContinent ?? selectedContinent;
-  const activeContinentStats = CONTINENT_STATS[activeContinentName] ?? null;
-  const activeContinentSpeciesCount = animals.filter((animal) => animal.continents.includes(activeContinentName as Continent)).length;
+  const activeContinentStats = activeContinentName ? CONTINENT_STATS[activeContinentName] ?? null : null;
+  const activeContinentSpeciesCount = activeContinentName
+    ? animals.filter((animal) => animal.continents.includes(activeContinentName as Continent)).length
+    : 0;
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -443,7 +447,7 @@ export default function Explorer() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {HABITAT_CARDS.map((card) => (
+          {HABITAT_CARDS.slice(0, 8).map((card) => (
             <Link
               key={card.id}
               to={card.link}
@@ -691,8 +695,8 @@ export default function Explorer() {
               Place-based browsing integrated directly into Explorer across Earth's continents and ocean basins.
             </p>
           </div>
-          <Link to={`/species?continent=${encodeURIComponent(selectedContinent)}`} className="ghost-button text-xs cursor-pointer select-none">
-            Open {selectedContinent} in directory
+          <Link to={`/species?continent=${encodeURIComponent(selectedContinent ?? "Africa")}`} className="ghost-button text-xs cursor-pointer select-none">
+            Open {selectedContinent ?? "Africa"} in directory
           </Link>
         </div>
 
@@ -709,10 +713,9 @@ export default function Explorer() {
                   next.set("continent", continent);
                   return next;
                 })}
-                className={[
-                  "group relative flex flex-col justify-between overflow-hidden rounded-[1.4rem] border p-4 text-left cursor-pointer transition duration-300 aspect-[16/10]",
-                  isSelected ? "border-app-accent/60 ring-2 ring-app-accent/40" : "border-white/12 hover:border-app-accent/40",
-                ].join(" ")}
+                className={`group relative flex flex-col justify-end overflow-hidden rounded-[1.4rem] border p-4 text-left transition duration-300 aspect-[16/10] cursor-pointer ${
+                  isSelected ? "border-app-accent bg-app-accent/15 shadow-xl scale-[1.02]" : "border-white/12 bg-[#060a08] hover:border-app-accent/40 hover:scale-[1.01]"
+                }`}
               >
                 <img
                   src={coverUrl}
@@ -725,12 +728,17 @@ export default function Explorer() {
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-app-accent backdrop-blur-md">
                     <GlobeGridIcon className="h-4 w-4" />
                   </span>
+                  <span className="rounded-full border border-white/15 bg-black/50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-accent backdrop-blur-md">
+                    {continent}
+                  </span>
                 </div>
 
-                <div className="relative z-10 mt-auto">
-                  <p className="text-lg font-bold text-white leading-tight drop-shadow-md group-hover:text-app-accent transition">{continent}</p>
-                  <p className="text-xs text-app-muted mt-0.5 drop-shadow">
-                    {animals.filter((animal) => animal.continents.includes(continent)).length} directory species
+                <div className="relative z-10 mt-3">
+                  <h3 className="text-base font-bold text-white group-hover:text-app-accent transition leading-tight">
+                    {continent}
+                  </h3>
+                  <p className="text-[11px] text-app-muted mt-0.5">
+                    {animals.filter((a) => a.continents.includes(continent as any)).length} indexed species
                   </p>
                 </div>
               </button>
@@ -757,7 +765,7 @@ export default function Explorer() {
       </section>
 
       {/* SECTION 7: INTERACTIVE WORLD MAP EXPLORER */}
-      <section className="page-card rounded-[2.2rem] p-6 md:p-8 space-y-6 overflow-hidden relative border border-white/12 bg-gradient-to-b from-[#09110c] via-[#060a08] to-[#040705] shadow-2xl">
+      <section className="page-card rounded-[2.2rem] p-6 md:p-8 space-y-5 overflow-hidden relative border border-white/12 bg-gradient-to-b from-[#09110c] via-[#060a08] to-[#040705] shadow-2xl">
         <div className="flex flex-wrap items-end justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2.5 text-app-accent mb-1">
@@ -766,18 +774,45 @@ export default function Explorer() {
             </div>
             <h2 className="text-2xl md:text-3xl font-bold text-white">Interactive Continent Map</h2>
             <p className="mt-1 text-sm text-app-muted max-w-2xl">
-              Hover over any continent to view live biogeographic stats and key species. Click a continent to jump directly into its regional species directory.
+              Click any continent to select it and view live biogeographic stats. Use the button on the right to explore its full species directory.
             </p>
           </div>
-          {hoveredContinent && (
+          {activeContinentName && (
             <button
               type="button"
-              onClick={() => navigate(`/species?continent=${encodeURIComponent(hoveredContinent)}`)}
+              onClick={() => navigate(`/species?continent=${encodeURIComponent(activeContinentName)}`)}
               className="primary-button text-xs cursor-pointer select-none"
             >
-              Explore {hoveredContinent} Directory <ChevronRightIcon className="h-3.5 w-3.5" />
+              Explore {activeContinentName} Directory <ChevronRightIcon className="h-3.5 w-3.5" />
             </button>
           )}
+        </div>
+
+        {/* Quick Continent Selector Bar */}
+        <div className="flex flex-wrap items-center gap-2 relative z-10 bg-black/40 border border-white/8 p-2.5 rounded-xl">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-app-soft px-2">Quick Select:</span>
+          {["Africa", "Asia", "Europe", "North America", "South America", "Australia", "Antarctica"].map((cName) => {
+            const isCurrent = activeContinentName === cName;
+            return (
+              <button
+                key={cName}
+                type="button"
+                onMouseEnter={() => setHoveredContinent(cName)}
+                onClick={() => setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set("continent", cName);
+                  return next;
+                })}
+                className={`px-3.5 py-1.5 text-xs rounded-lg border transition cursor-pointer font-medium select-none ${
+                  isCurrent
+                    ? "border-app-accent/80 bg-app-accent/25 text-app-accent font-bold shadow-md"
+                    : "border-white/10 bg-white/[0.03] text-app-soft hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                {cName}
+              </button>
+            );
+          })}
         </div>
 
         {/* Map Container + Tooltip Overlay Grid */}
@@ -787,7 +822,7 @@ export default function Explorer() {
             className="lg:col-span-8 relative aspect-[16/9] w-full rounded-2xl overflow-hidden bg-[#050b07] border border-white/8 flex items-center justify-center"
             onMouseLeave={() => setHoveredContinent(null)}
           >
-            <ComposableMap projection="geoMercator" projectionConfig={{ scale: 105, center: [0, 20] }} className="h-full w-full">
+            <ComposableMap projection="geoEqualEarth" projectionConfig={{ scale: 140, center: [10, 5] }} className="h-full w-full">
               <ZoomableGroup zoom={1} maxZoom={4} minZoom={1}>
                 <Geographies geography={GEO_URL}>
                   {({ geographies }: { geographies: Array<{ rsmKey: string; id: string; properties: Record<string, unknown> }> }) =>
@@ -805,34 +840,37 @@ export default function Explorer() {
                           }}
                           onClick={() => {
                             if (continent) {
-                              navigate(`/species?continent=${encodeURIComponent(continent)}`);
+                              setSearchParams((prev) => {
+                                const next = new URLSearchParams(prev);
+                                next.set("continent", continent);
+                                return next;
+                              });
                             }
                           }}
                           style={{
                             default: {
-                              fill: isHovered
+                              fill: isSelected
+                                ? "#2d6a4f"
+                                : isHovered
                                 ? "#ddbf87"
-                                : isSelected
-                                ? "#3b6b47"
                                 : continent
-                                ? "#122116"
-                                : "#09120b",
-                              stroke: isHovered ? "#fff8ed" : isSelected ? "#ddbf87" : "rgba(255,255,255,0.14)",
-                              strokeWidth: isHovered || isSelected ? 1.2 : 0.4,
+                                ? "#141b17"
+                                : "#0c120e",
+                              stroke: isSelected ? "#52b788" : isHovered ? "#ffffff" : "rgba(255,255,255,0.06)",
+                              strokeWidth: isSelected ? 1.2 : isHovered ? 0.8 : 0.3,
                               outline: "none",
-                              transition: "all 200ms ease",
                             },
                             hover: {
-                              fill: "#ddbf87",
-                              stroke: "#fff8ed",
-                              strokeWidth: 1.5,
+                              fill: isSelected ? "#347a5b" : "#ddbf87",
+                              stroke: "#ffffff",
+                              strokeWidth: 1,
                               outline: "none",
                               cursor: continent ? "pointer" : "default",
                             },
                             pressed: {
-                              fill: "#f0d39c",
+                              fill: "#2d6a4f",
                               stroke: "#ffffff",
-                              strokeWidth: 1.5,
+                              strokeWidth: 1.2,
                               outline: "none",
                             },
                           }}
@@ -845,7 +883,7 @@ export default function Explorer() {
             </ComposableMap>
 
             {/* Hint tag on top of map */}
-            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-app-soft flex items-center gap-2 pointer-events-none">
+            <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-app-soft flex items-center gap-2 pointer-events-none">
               <span className="h-2 w-2 rounded-full bg-app-accent animate-pulse" />
               Hover to preview stats · Click continent to view species
             </div>
