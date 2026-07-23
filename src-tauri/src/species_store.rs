@@ -750,6 +750,23 @@ fn gbif_item_to_record(item: &GbifSpeciesSearchItem, common_name: Option<String>
     })
 }
 
+pub fn delete_species_record(app: Option<&AppHandle>, id: &str) -> Result<()> {
+    let path = db_path_for_app(app)?;
+    let conn = open_connection(&path)?;
+
+    let gbif_taxon_key: Option<i64> = id
+        .strip_prefix("gbif-")
+        .and_then(|k| k.parse::<i64>().ok());
+
+    if let Some(key) = gbif_taxon_key {
+        let _ = conn.execute("DELETE FROM species_profiles WHERE gbif_taxon_key = ?1", params![key]);
+        let _ = conn.execute("DELETE FROM species_index WHERE gbif_taxon_key = ?1", params![key]);
+    }
+    let _ = conn.execute("DELETE FROM species_index WHERE id = ?1", params![id]);
+
+    Ok(())
+}
+
 fn preferred_common_name(item: &GbifSpeciesSearchItem) -> Option<String> {
     item.vernacular_name
         .clone()
