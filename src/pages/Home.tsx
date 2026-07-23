@@ -401,7 +401,7 @@ export default function Home() {
             </p>
           </div>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {quickActions.map(([to, title, description]) => (
             <Link key={to} to={to} className="interactive-card rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(20,28,21,0.98),rgba(8,12,9,0.95))] p-4">
               <h3 className="text-lg font-semibold text-white">{title}</h3>

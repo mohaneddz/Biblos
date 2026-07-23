@@ -91,16 +91,69 @@ function normalize(value: string) {
   return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function nodeMatchesAnimal(node: TreeNode, animal: Animal) {
+const TAXON_EQUIVALENTS: Record<string, string[]> = {
+  metazoa: ["animalia", "animal", "animals", "metazoa"],
+  animalia: ["animalia", "animal", "animals", "metazoa"],
+  chordata: ["chordata", "chordate", "chordates", "vertebrata", "vertebrates"],
+  mammalia: ["mammalia", "mammal", "mammals"],
+  aves: ["aves", "bird", "birds"],
+  reptilia: ["reptilia", "reptile", "reptiles"],
+  amphibia: ["amphibia", "amphibian", "amphibians"],
+  actinopterygii: ["actinopterygii", "fish", "fishes", "osteichthyes", "ray-finned fishes"],
+  chondrichthyes: ["chondrichthyes", "cartilaginous fishes", "elasmobranchii"],
+  insecta: ["insecta", "insect", "insects"],
+  arachnida: ["arachnida", "arachnid", "arachnids"],
+  cephalopoda: ["cephalopoda", "cephalopod", "cephalopods"],
+  mollusca: ["mollusca", "mollusk", "mollusks"],
+  arthropoda: ["arthropoda", "arthropod", "arthropods"],
+  cnidaria: ["cnidaria", "cnidarian", "cnidarians"],
+  plantae: ["plantae", "plant", "plants"],
+  fungi: ["fungi", "fungus"],
+  bacteria: ["bacteria", "bacterium"],
+  archaea: ["archaea", "archaeon"],
+};
+
+function isTaxonomicEquivalent(val1: string, val2: string): boolean {
+  const n1 = normalize(val1);
+  const n2 = normalize(val2);
+  if (!n1 || !n2) return false;
+  if (n1 === n2) return true;
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+
+  const eq1 = TAXON_EQUIVALENTS[n1];
+  if (eq1 && eq1.includes(n2)) return true;
+
+  const eq2 = TAXON_EQUIVALENTS[n2];
+  if (eq2 && eq2.includes(n1)) return true;
+
+  return false;
+}
+
+function nodeMatchesAnimal(node: TreeNode, animal: Animal): boolean {
   if (node.speciesIds?.length) return node.speciesIds.includes(animal.id);
-  const scope = node.scope;
-  if (!scope) return false;
-  return Object.entries(scope).every(([key, value]) => {
-    const classificationKey = key as keyof Animal["classification"];
-    const targetVal = animal.classification[classificationKey];
-    if (!targetVal) return false;
-    return normalize(targetVal) === normalize(value);
-  });
+  if (node.id === "life" || node.rank === "Root") return true;
+
+  if (node.scope && Object.keys(node.scope).length > 0) {
+    const scopeMatch = Object.entries(node.scope).every(([key, value]) => {
+      const classificationKey = key as keyof Animal["classification"];
+      const targetVal = animal.classification[classificationKey];
+      if (!targetVal) return false;
+      return isTaxonomicEquivalent(targetVal, value as string);
+    });
+    if (scopeMatch) return true;
+  }
+
+  const normId = normalize(node.id);
+  const normLabel = normalize(node.label);
+  const classValues = Object.values(animal.classification).filter(Boolean);
+
+  for (const val of classValues) {
+    if (isTaxonomicEquivalent(val, normId) || isTaxonomicEquivalent(val, normLabel)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getAnimalsForNode(node: TreeNode, availableAnimals: Animal[]) {
