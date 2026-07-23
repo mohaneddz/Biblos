@@ -621,3 +621,35 @@ export function FolderPlusIcon(props: IconProps) {
   );
 }
 
+export function MoonIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </IconBase>
+  );
+}
+
+export function SunriseIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 2v6" />
+      <path d="m4.93 10.93 1.41 1.41" />
+      <path d="M2 18h20" />
+      <path d="M20 18a8 8 0 0 0-16 0" />
+      <path d="m19.07 10.93-1.41 1.41" />
+      <path d="M22 22H2" />
+    </IconBase>
+  );
+}
+
+export function AlertShieldIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+      <path d="M12 8v4" />
+      <path d="M12 16h.01" />
+    </IconBase>
+  );
+}
+
+

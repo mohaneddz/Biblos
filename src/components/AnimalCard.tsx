@@ -18,12 +18,14 @@ import { hydrateSpeciesWithAI } from "../services/speciesStore";
 import { reportError } from "../services/errorReporter";
 import { AddToFolderModal } from "./AddToFolderModal";
 import { getSpeciesMedia } from "../services/speciesMedia";
+import { isLatinText } from "../services/gbifService";
 
 type AnimalCardProps = {
   animal: Animal;
 };
 
 export function AnimalCard({ animal }: AnimalCardProps) {
+  const [removed, setRemoved] = useState(false);
   const isFavorite = getFavorites().includes(animal.id);
   const isBookmarked = getBookmarkedSpecies().includes(animal.id);
   const isCached = animal.id.startsWith("gbif-") || getCachedSpecies(animal.id) !== null;
@@ -35,6 +37,10 @@ export function AnimalCard({ animal }: AnimalCardProps) {
     ...animal.images,
   ]);
   const [imageRefreshing, setImageRefreshing] = useState(false);
+
+  if (removed) {
+    return null;
+  }
 
   const handleRefreshImage = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -114,6 +120,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
   };
 
   const handleHide = () => {
+    setRemoved(true);
     hideSpecies(animal.id);
     toastService.success(`Hidden "${animal.commonName}" from directory`);
   };
@@ -124,6 +131,7 @@ export function AnimalCard({ animal }: AnimalCardProps) {
       message: `Are you sure you want to delete all cached profile data for "${animal.commonName}"?`,
       confirmText: "Delete",
       onConfirm: () => {
+        setRemoved(true);
         deleteCachedSpecies(animal.id);
         toastService.success(`Deleted cached data for "${animal.commonName}"`);
       },
@@ -173,11 +181,12 @@ export function AnimalCard({ animal }: AnimalCardProps) {
             <RefreshIcon className={imageRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </button>
 
-
           <div className="absolute inset-x-0 bottom-0 p-5">
             <div className="mt-2 flex items-end justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-semibold text-white">{animal.commonName}</h3>
+                <h3 className="text-2xl font-semibold text-white">
+                  {isLatinText(animal.commonName) ? animal.commonName : (animal.classification?.species || animal.scientificName)}
+                </h3>
                 <p className="mt-1 text-sm italic text-app-muted">{animal.scientificName}</p>
               </div>
             </div>
