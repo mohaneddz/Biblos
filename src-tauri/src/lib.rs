@@ -95,6 +95,11 @@ async fn get_cached_species_profiles(
 }
 
 #[tauri::command]
+async fn delete_species_local(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    species_store::delete_species_record(Some(&app), &id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn search_inat_autocomplete(
     app: tauri::AppHandle,
     query: String,
@@ -237,6 +242,7 @@ pub fn run() {
             lookup_species_and_store,
             hydrate_species_profile,
             get_cached_species_profiles,
+            delete_species_local,
             search_inat_autocomplete,
             parse_query_to_filters,
             ask_ai_naturalist,

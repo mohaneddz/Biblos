@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { continents } from "../data/discovery";
 import { animals } from "../data/animals";
 import type { Continent } from "../types/animal";
@@ -246,10 +247,86 @@ const CONTINENT_COVERS: Record<string, string> = {
   Antarctica: "https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=800&q=80",
 };
 
+const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+
+const CONTINENT_COUNTRIES: Record<string, Set<number>> = {
+  Africa: new Set([12, 24, 72, 108, 120, 132, 140, 148, 174, 175, 178, 180, 204, 226, 231, 232, 260, 262, 266, 270, 288, 324, 384, 404, 426, 430, 434, 450, 454, 466, 478, 504, 508, 516, 562, 566, 624, 638, 646, 678, 686, 694, 706, 710, 716, 729, 732, 788, 800, 818, 834, 894]),
+  Asia: new Set([4, 31, 48, 50, 64, 96, 104, 116, 142, 156, 158, 268, 356, 360, 364, 368, 376, 392, 398, 400, 408, 410, 414, 417, 418, 422, 458, 462, 496, 524, 512, 586, 608, 634, 643, 682, 702, 704, 760, 762, 764, 784, 792, 795, 860, 887]),
+  Europe: new Set([8, 20, 40, 56, 70, 100, 112, 191, 203, 208, 233, 246, 250, 276, 300, 348, 352, 372, 380, 428, 438, 440, 442, 470, 492, 498, 499, 528, 578, 616, 620, 642, 674, 688, 703, 705, 724, 752, 756, 804, 826]),
+  "North America": new Set([28, 44, 52, 84, 124, 188, 192, 214, 222, 304, 308, 320, 332, 340, 388, 484, 558, 591, 659, 662, 670, 780, 840]),
+  "South America": new Set([32, 68, 76, 152, 170, 218, 238, 254, 328, 600, 604, 740, 858, 862]),
+  Australia: new Set([36, 90, 242, 540, 548, 554, 598, 882]),
+  Antarctica: new Set([10]),
+};
+
+function getContinentForCountry(id: number | string): string | null {
+  const num = typeof id === "string" ? parseInt(id, 10) : id;
+  for (const [continent, set] of Object.entries(CONTINENT_COUNTRIES)) {
+    if (set.has(num)) return continent;
+  }
+  return null;
+}
+
+const CONTINENT_STATS: Record<string, {
+  name: string;
+  tagline: string;
+  keyHabitats: string[];
+  iconicSpecies: string[];
+}> = {
+  Africa: {
+    name: "Africa",
+    tagline: "Vast tropical savannas, dense Congo basin rainforests, and the Sahara desert.",
+    keyHabitats: ["African Savanna", "Tropical Rainforest", "Arid Desert", "Freshwater River"],
+    iconicSpecies: ["African Elephant", "African Lion", "Cheetah", "Giraffe", "Gorilla"],
+  },
+  Asia: {
+    name: "Asia",
+    tagline: "Himalayan peaks, Siberian boreal forests, and Southeast Asian coral reefs.",
+    keyHabitats: ["Himalayan Alpine", "Tropical Rainforest", "Steppe Grassland", "Coral Reef"],
+    iconicSpecies: ["Bengal Tiger", "Giant Panda", "Snow Leopard", "Red Panda", "Komodo Dragon"],
+  },
+  Europe: {
+    name: "Europe",
+    tagline: "Temperate deciduous woodlands, Alpine meadows, and Mediterranean scrublands.",
+    keyHabitats: ["Temperate Forest", "Alpine Meadow", "Mediterranean Basin", "Freshwater Wetland"],
+    iconicSpecies: ["Grey Wolf", "Eurasian Lynx", "Brown Bear", "Red Fox", "Golden Eagle"],
+  },
+  "North America": {
+    name: "North America",
+    tagline: "Boreal evergreen forests, Great Plains grasslands, and Sonoran deserts.",
+    keyHabitats: ["Temperate Deciduous Forest", "Arid Desert", "Great Plains", "Arctic Tundra"],
+    iconicSpecies: ["Grizzly Bear", "Bald Eagle", "American Bison", "Cougar", "Monarch Butterfly"],
+  },
+  "South America": {
+    name: "South America",
+    tagline: "The Amazon rainforest canopy, Andes mountains, and Pantanal wetlands.",
+    keyHabitats: ["Tropical Rainforest", "Pantanal Wetland", "Andean Alpine", "Atacama Desert"],
+    iconicSpecies: ["Jaguar", "Capybara", "Green Anaconda", "Poison Dart Frog", "Harpy Eagle"],
+  },
+  Australia: {
+    name: "Australia",
+    tagline: "Outback deserts, Great Barrier Reef corals, and eucalyptus woodlands.",
+    keyHabitats: ["Coral Reef", "Arid Outback", "Eucalyptus Forest", "Coastal Island"],
+    iconicSpecies: ["Red Kangaroo", "Koala", "Platypus", "Whale Shark", "Tasmanian Devil"],
+  },
+  Antarctica: {
+    name: "Antarctica",
+    tagline: "Frozen polar ice sheets, sub-zero oceanic currents, and sea ice shelves.",
+    keyHabitats: ["Polar Ice Cap", "Deep Ocean", "Sub-Antarctic Island", "Pelagic Sea"],
+    iconicSpecies: ["Emperor Penguin", "Leopard Seal", "Blue Whale", "Adélie Penguin", "Snow Petrel"],
+  },
+};
+
 export default function Explorer() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedContinent = (searchParams.get("continent") as Continent | null) ?? "Africa";
   const continentSpecies = animals.filter((animal) => animal.continents.includes(selectedContinent));
+
+  const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
+  const activeContinentName = hoveredContinent ?? selectedContinent;
+  const activeContinentStats = CONTINENT_STATS[activeContinentName] ?? null;
+  const activeContinentSpeciesCount = animals.filter((animal) => animal.continents.includes(activeContinentName as Continent)).length;
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -668,6 +745,168 @@ export default function Explorer() {
                 {animal.commonName}
               </Link>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 7: INTERACTIVE WORLD MAP EXPLORER */}
+      <section className="page-card rounded-[2.2rem] p-6 md:p-8 space-y-6 overflow-hidden relative border border-white/12 bg-gradient-to-b from-[#09110c] via-[#060a08] to-[#040705] shadow-2xl">
+        <div className="flex flex-wrap items-end justify-between gap-4 relative z-10">
+          <div>
+            <div className="flex items-center gap-2.5 text-app-accent mb-1">
+              <GlobeGridIcon className="h-5 w-5" />
+              <span className="text-xs font-bold uppercase tracking-[0.2em]">Global Biogeography Map</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white">Interactive Continent Map</h2>
+            <p className="mt-1 text-sm text-app-muted max-w-2xl">
+              Hover over any continent to view live biogeographic stats and key species. Click a continent to jump directly into its regional species directory.
+            </p>
+          </div>
+          {hoveredContinent && (
+            <button
+              type="button"
+              onClick={() => navigate(`/species?continent=${encodeURIComponent(hoveredContinent)}`)}
+              className="primary-button text-xs cursor-pointer select-none"
+            >
+              Explore {hoveredContinent} Directory <ChevronRightIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Map Container + Tooltip Overlay Grid */}
+        <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-6 items-center border border-white/10 rounded-[1.8rem] bg-[#030604] p-4 md:p-6 overflow-hidden">
+          {/* Map Surface (8 columns on lg) */}
+          <div
+            className="lg:col-span-8 relative aspect-[16/9] w-full rounded-2xl overflow-hidden bg-[#050b07] border border-white/8 flex items-center justify-center"
+            onMouseLeave={() => setHoveredContinent(null)}
+          >
+            <ComposableMap projection="geoMercator" projectionConfig={{ scale: 105, center: [0, 20] }} className="h-full w-full">
+              <ZoomableGroup zoom={1} maxZoom={4} minZoom={1}>
+                <Geographies geography={GEO_URL}>
+                  {({ geographies }: { geographies: Array<{ rsmKey: string; id: string; properties: Record<string, unknown> }> }) =>
+                    geographies.map((geo) => {
+                      const continent = getContinentForCountry(geo.id);
+                      const isHovered = hoveredContinent === continent;
+                      const isSelected = selectedContinent === continent;
+
+                      return (
+                        <Geography
+                          key={geo.rsmKey}
+                          geography={geo}
+                          onMouseEnter={() => {
+                            if (continent) setHoveredContinent(continent);
+                          }}
+                          onClick={() => {
+                            if (continent) {
+                              navigate(`/species?continent=${encodeURIComponent(continent)}`);
+                            }
+                          }}
+                          style={{
+                            default: {
+                              fill: isHovered
+                                ? "#ddbf87"
+                                : isSelected
+                                ? "#3b6b47"
+                                : continent
+                                ? "#122116"
+                                : "#09120b",
+                              stroke: isHovered ? "#fff8ed" : isSelected ? "#ddbf87" : "rgba(255,255,255,0.14)",
+                              strokeWidth: isHovered || isSelected ? 1.2 : 0.4,
+                              outline: "none",
+                              transition: "all 200ms ease",
+                            },
+                            hover: {
+                              fill: "#ddbf87",
+                              stroke: "#fff8ed",
+                              strokeWidth: 1.5,
+                              outline: "none",
+                              cursor: continent ? "pointer" : "default",
+                            },
+                            pressed: {
+                              fill: "#f0d39c",
+                              stroke: "#ffffff",
+                              strokeWidth: 1.5,
+                              outline: "none",
+                            },
+                          }}
+                        />
+                      );
+                    })
+                  }
+                </Geographies>
+              </ZoomableGroup>
+            </ComposableMap>
+
+            {/* Hint tag on top of map */}
+            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-app-soft flex items-center gap-2 pointer-events-none">
+              <span className="h-2 w-2 rounded-full bg-app-accent animate-pulse" />
+              Hover to preview stats · Click continent to view species
+            </div>
+          </div>
+
+          {/* Continent Stats Panel (4 columns on lg) */}
+          <div className="lg:col-span-4 h-full flex flex-col justify-between">
+            {activeContinentStats ? (
+              <div className="rounded-[1.5rem] border border-app-accent/30 bg-gradient-to-br from-[#0c1610] to-[#060b08] p-6 space-y-4 shadow-xl relative overflow-hidden transition-all duration-300">
+                <div className="absolute top-0 right-0 h-32 w-32 bg-app-accent/10 rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-app-accent">
+                      Continent Stats
+                    </span>
+                    <h3 className="text-2xl font-bold text-white mt-0.5">{activeContinentStats.name}</h3>
+                  </div>
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-app-accent/15 border border-app-accent/30 text-app-accent">
+                    {activeContinentSpeciesCount} species
+                  </span>
+                </div>
+
+                <p className="text-xs text-app-muted leading-5">
+                  {activeContinentStats.tagline}
+                </p>
+
+                {/* Associated Habitats */}
+                <div>
+                  <p className="text-[10px] uppercase font-semibold tracking-wider text-app-soft mb-2">Key Biomes & Habitats</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeContinentStats.keyHabitats.map((hab) => (
+                      <span key={hab} className="text-[10px] px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/10 text-white/90">
+                        {hab}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Iconic Species */}
+                <div>
+                  <p className="text-[10px] uppercase font-semibold tracking-wider text-app-soft mb-2">Iconic Wildlife</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeContinentStats.iconicSpecies.map((sp) => (
+                      <span key={sp} className="text-[10px] px-2.5 py-1 rounded-md bg-app-accent/10 border border-app-accent/25 text-app-accent font-medium">
+                        {sp}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigate(`/species?continent=${encodeURIComponent(activeContinentStats.name)}`)}
+                  className="w-full mt-2 primary-button text-xs py-2.5 justify-center cursor-pointer select-none"
+                >
+                  Explore All {activeContinentStats.name} Species <ChevronRightIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.02] p-8 text-center space-y-3 flex flex-col items-center justify-center min-h-[20rem]">
+                <GlobeGridIcon className="h-10 w-10 text-app-soft/60" />
+                <h4 className="text-base font-semibold text-white">Select or Hover a Continent</h4>
+                <p className="text-xs text-app-muted leading-5 max-w-xs">
+                  Move your cursor over Africa, Asia, Europe, North America, South America, Australia, or Antarctica to display continent statistics.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
