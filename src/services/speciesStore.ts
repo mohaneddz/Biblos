@@ -132,11 +132,11 @@ function mockSearch(query: string) {
 
 export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
   const inferredClass = inferClassFromHit(hit);
-  const inferredHabitat = inferHabitatFromHit(hit);
-  const inferredDiet = inferDietFromHit(hit);
-  const inferredActivity = inferActivityPatternFromHit(hit);
-  const inferredContinents = inferContinentsFromHit(hit);
-  const inferredStatus = inferConservationStatusFromHit(hit);
+  const inferredHabitat = hit.habitat ? [hit.habitat] : [inferHabitatFromHit(hit)];
+  const inferredDiet = hit.diet ?? inferDietFromHit(hit);
+  const inferredActivity = (hit.activity_pattern as Animal["activityPattern"]) ?? inferActivityPatternFromHit(hit);
+  const inferredContinents = hit.continents ? [hit.continents as Continent] : inferContinentsFromHit(hit);
+  const inferredStatus = (hit.conservation_status as Animal["conservationStatus"]) ?? inferConservationStatusFromHit(hit);
 
   return {
     id: hit.id,
@@ -151,12 +151,12 @@ export function previewAnimalFromHit(hit: SpeciesSearchHit): Animal {
       kingdom: hit.kingdom ?? "Animalia",
       phylum: hit.phylum ?? "Chordata",
       className: inferredClass,
-      order: hit.order_name ?? "Chordata",
-      family: hit.family ?? "Fauna",
+      order: hit.order_name ?? "",
+      family: hit.family ?? "",
       genus: hit.genus ?? hit.canonical_name.split(" ")[0] ?? hit.canonical_name,
       species: hit.canonical_name,
     },
-    habitat: [inferredHabitat],
+    habitat: inferredHabitat,
     diet: inferredDiet,
     activityPattern: inferredActivity,
     continents: inferredContinents,

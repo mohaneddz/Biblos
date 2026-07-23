@@ -11,6 +11,7 @@ import Ecosystems from "./pages/Ecosystems";
 import EcosystemDetail from "./pages/EcosystemDetail";
 import Explorer from "./pages/Explorer";
 import Home from "./pages/Home";
+import LifeClass from "./pages/LifeClass";
 import Settings from "./pages/Settings";
 import Species from "./pages/Species";
 import SpeciesDetail from "./pages/SpeciesDetail";
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/species" element={<Species />} />
         <Route path="/species/:id" element={<SpeciesDetail />} />
         <Route path="/tree" element={<TreeOfLife />} />
+        <Route path="/life-class/:id" element={<LifeClass />} />
         <Route path="/explorer" element={<Explorer />} />
         <Route path="/ecosystems" element={<Ecosystems />} />
         <Route path="/ecosystems/:id" element={<EcosystemDetail />} />
