@@ -167,7 +167,7 @@ async fn ask_ai_naturalist(
     }));
 
     let response = Client::builder()
-        .user_agent("Biblos/0.1")
+        .user_agent("Biblos/0.7")
         .build()
         .map_err(|error| error.to_string())?
         .post("https://api.groq.com/openai/v1/chat/completions")
@@ -205,7 +205,7 @@ async fn ask_ai_naturalist(
 async fn fetch_image_base64(url: String) -> Result<String, String> {
     use base64::Engine;
     let client = Client::builder()
-        .user_agent("Biblos/0.1 (Desktop)")
+        .user_agent("Biblos/0.7 (Desktop)")
         .build()
         .map_err(|error| error.to_string())?;
 
