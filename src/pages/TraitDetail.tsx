@@ -73,7 +73,7 @@ const TRAIT_CONFIGS: Record<string, TraitConfig> = {
     gradient: "from-[#081012] via-[#060c0e] to-[#040705]",
     icon: GlobeGridIcon,
     badge: "Dietary Profile",
-    imageUrl: "https://images.unsplash.com/photo-1516683011827-46882a229ad5?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1551085254-e96b210df58a?auto=format&fit=crop&w=1600&q=80",
   },
   "filter feeder": {
     title: "Filter Feeder",
@@ -156,7 +156,7 @@ const TRAIT_CONFIGS: Record<string, TraitConfig> = {
     gradient: "from-[#0c0c0c] via-[#080808] to-[#040705]",
     icon: LeafClusterIcon,
     badge: "IUCN Conservation Status",
-    imageUrl: "https://images.unsplash.com/photo-1569742918414-0498b584d412?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80",
   },
 
   // Activity Patterns
