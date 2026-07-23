@@ -91,4 +91,3 @@ export type Folder = {
   createdAt: number;
   updatedAt: number;
 };
-
