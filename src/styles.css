@@ -329,8 +329,14 @@
 
   .page-frame {
     display: grid;
-    gap: 1.25rem;
-    padding: 1rem;
+    gap: 1rem;
+    padding: 0.85rem;
+  }
+
+  @media (min-width: 640px) {
+    .page-frame {
+      padding: 1.25rem;
+    }
   }
 
   @media (min-width: 768px) {
@@ -475,23 +481,23 @@
   .page-title {
     margin: 0;
     font-family: var(--font-display-family);
-    font-size: clamp(2.5rem, 5vw, 4.6rem);
-    line-height: 0.95;
-    letter-spacing: -0.03em;
+    font-size: clamp(1.8rem, 4vw, 3.8rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
     color: white;
   }
 
   .page-lede {
-    margin-top: 1rem;
+    margin-top: 0.75rem;
     max-width: 54rem;
     color: var(--app-muted);
-    font-size: 1rem;
-    line-height: 1.9;
+    font-size: 0.95rem;
+    line-height: 1.75;
   }
 
   .page-section-title {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: white;
   }
@@ -501,11 +507,19 @@
     gap: 1rem;
   }
 
-  @media (min-width: 960px) {
+  @media (min-width: 640px) {
     .page-grid-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+  }
 
+  @media (min-width: 768px) {
+    .page-grid-3 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1200px) {
     .page-grid-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
