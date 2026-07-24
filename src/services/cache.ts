@@ -340,6 +340,7 @@ export function getAllCachedSpecies(): Animal[] {
 export function updateSettings(partial: Partial<AppSettings>) {
   const next = { ...getSettings(), ...partial };
   writeJson(SETTINGS_KEY, next);
+  notifyCacheUpdated();
   return next;
 }
 

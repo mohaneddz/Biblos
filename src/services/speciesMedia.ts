@@ -6,6 +6,34 @@ const MEDIA_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const memoryCache = new Map<string, Promise<SpeciesMediaBundle>>();
 export type SpeciesMediaMode = "primary" | "full";
 
+// ─── Concurrency Limiter ──────────────────────────────────────────────────────
+// Cards resolve their cover art independently, and without a cap, scrolling
+// through a grid of dozens of cards fires dozens of parallel Wikipedia/iNat
+// requests at once. Browsers only allow ~6 concurrent connections per host,
+// so unthrottled bursts just queue behind each other and everything gets slow.
+// Capping in-flight resolutions keeps requests flowing steadily instead.
+const MAX_CONCURRENT_RESOLUTIONS = 6;
+let activeResolutions = 0;
+const resolutionQueue: Array<() => void> = [];
+
+function acquireResolutionSlot(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const tryAcquire = () => {
+      if (activeResolutions < MAX_CONCURRENT_RESOLUTIONS) {
+        activeResolutions += 1;
+        resolve(() => {
+          activeResolutions -= 1;
+          const next = resolutionQueue.shift();
+          if (next) next();
+        });
+      } else {
+        resolutionQueue.push(tryAcquire);
+      }
+    };
+    tryAcquire();
+  });
+}
+
 // ─── API Response Types ─────────────────────────────────────────────────────
 
 type WikipediaSummary = {
@@ -580,7 +608,11 @@ async function fetchGBIFAssets(animal: Animal): Promise<SpeciesImageAsset[]> {
 
 // ─── Primary Image Resolution ─────────────────────────────────────────────────
 
-async function resolvePrimaryMedia(animal: Animal, skipFallback = false): Promise<SpeciesMediaBundle> {
+async function resolvePrimaryMedia(
+  animal: Animal,
+  skipFallback = false,
+  acquireSlot = true,
+): Promise<SpeciesMediaBundle> {
   const cached = readCache(animal.id, "primary");
   if (cached) return cached;
 
@@ -596,25 +628,34 @@ async function resolvePrimaryMedia(animal: Animal, skipFallback = false): Promis
     return bundle;
   }
 
-  // Run all primary sources in parallel — first non-null wins
-  const [wikipediaPrimary, iNaturalistPrimary] = await Promise.all([
-    fetchWikipediaPrimary(animal),
-    fetchINaturalistPrimary(animal),
-  ]);
+  // When called from resolveFullMedia, the caller already holds a slot for
+  // this resolution — acquiring a second one here would deadlock once all
+  // slots are held by outer calls waiting on their own inner call.
+  const releaseSlot = acquireSlot ? await acquireResolutionSlot() : null;
+  let primary: SpeciesImageAsset | null;
+  try {
+    // Run all primary sources in parallel — first non-null wins
+    const [wikipediaPrimary, iNaturalistPrimary] = await Promise.all([
+      fetchWikipediaPrimary(animal),
+      fetchINaturalistPrimary(animal),
+    ]);
 
-  let primary = iNaturalistPrimary ?? wikipediaPrimary ?? null;
+    primary = iNaturalistPrimary ?? wikipediaPrimary ?? null;
 
-  // If still null, try a fallback search on Wikimedia Commons category or GBIF occurrences!
-  if (!primary && !skipFallback) {
-    const wikiAssets = await fetchWikimediaCommonsAssets(animal);
-    if (wikiAssets.length > 0) {
-      primary = wikiAssets[0];
-    } else {
-      const gbifAssets = await fetchGBIFAssets(animal);
-      if (gbifAssets.length > 0) {
-        primary = gbifAssets[0];
+    // If still null, try a fallback search on Wikimedia Commons category or GBIF occurrences!
+    if (!primary && !skipFallback) {
+      const wikiAssets = await fetchWikimediaCommonsAssets(animal);
+      if (wikiAssets.length > 0) {
+        primary = wikiAssets[0];
+      } else {
+        const gbifAssets = await fetchGBIFAssets(animal);
+        if (gbifAssets.length > 0) {
+          primary = gbifAssets[0];
+        }
       }
     }
+  } finally {
+    releaseSlot?.();
   }
 
   const bundle: SpeciesMediaBundle = {
@@ -635,13 +676,23 @@ async function resolveFullMedia(animal: Animal): Promise<SpeciesMediaBundle> {
   const cached = readCache(animal.id, "full");
   if (cached) return cached;
 
-  // Fetch all sources in parallel
-  const [primaryBundle, wikiCommonsAssets, inatAssets, gbifAssets] = await Promise.all([
-    resolvePrimaryMedia(animal, true),
-    fetchWikimediaCommonsAssets(animal),
-    fetchINaturalistAssets(animal),
-    fetchGBIFAssets(animal),
-  ]);
+  // Fetch all sources in parallel (resolvePrimaryMedia acquires its own slot,
+  // so only guard the three calls made directly by this function)
+  const releaseSlot = await acquireResolutionSlot();
+  let wikiCommonsAssets: SpeciesImageAsset[];
+  let inatAssets: SpeciesImageAsset[];
+  let gbifAssets: SpeciesImageAsset[];
+  let primaryBundle: SpeciesMediaBundle;
+  try {
+    [primaryBundle, wikiCommonsAssets, inatAssets, gbifAssets] = await Promise.all([
+      resolvePrimaryMedia(animal, true, false),
+      fetchWikimediaCommonsAssets(animal),
+      fetchINaturalistAssets(animal),
+      fetchGBIFAssets(animal),
+    ]);
+  } finally {
+    releaseSlot();
+  }
 
   // Combine: iNat + Wikimedia Commons first (highest quality photos),
   // then GBIF (more specimens, variable quality)
