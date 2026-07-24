@@ -653,23 +653,30 @@ export default function Species() {
             { key: "activity", label: "Activity", current: filters.activityPattern, options: activityPatterns },
             { key: "status", label: "Status", current: filters.conservationStatus, options: statuses },
             { key: "continent", label: "Continent", current: filters.continent, options: continents },
-          ].map(({ key, label, current, options }) => (
-            <label key={key} className="flex flex-col gap-1.5 text-xs font-medium text-app-muted min-w-0">
-              <span className="truncate">{label}</span>
-              <select
-                value={current}
-                onChange={(event) => setFilter(key, event.target.value)}
-                className="w-full min-w-0 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-2.5 text-sm text-app-text truncate focus:border-app-accent/40 focus:outline-none cursor-pointer"
-              >
-                <option value="">All</option>
-                {options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+          ].map(({ key, label, current, options }) => {
+            const isActive = Boolean(current);
+            return (
+              <label key={key} className="flex flex-col gap-1.5 text-xs font-medium text-app-muted min-w-0">
+                <span className={`truncate transition-colors ${isActive ? "text-app-accent font-semibold" : ""}`}>{label}</span>
+                <select
+                  value={current}
+                  onChange={(event) => setFilter(key, event.target.value)}
+                  className={`w-full min-w-0 rounded-[1rem] border px-3 py-2.5 text-sm truncate focus:outline-none cursor-pointer transition-all duration-200 ${
+                    isActive
+                      ? "border-app-accent/70 bg-app-accent/10 text-app-accent font-medium shadow-[0_0_12px_rgba(221,191,135,0.18)] focus:border-app-accent ring-1 ring-app-accent/30"
+                      : "border-white/8 bg-black/30 text-app-text focus:border-app-accent/40"
+                  }`}
+                >
+                  <option value="" className="bg-stone-900 text-white">All</option>
+                  {options.map((option) => (
+                    <option key={option} value={option} className="bg-stone-900 text-white">
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
         </div>
 
         {useIndexedSearch || searchLoading || lookupLoading || filterDiscoveryLoading ? (

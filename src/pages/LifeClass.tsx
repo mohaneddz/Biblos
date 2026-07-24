@@ -675,11 +675,15 @@ export default function LifeClass() {
         <div className="page-card rounded-[1.4rem] p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 border border-white/10 bg-black/40 backdrop-blur-md">
           {/* Status Filter */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-app-soft mb-1.5 block">Conservation Status</label>
+            <label className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 block transition-colors ${selectedStatus !== "All" ? "text-app-accent" : "text-app-soft"}`}>Conservation Status</label>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-app-accent transition cursor-pointer"
+              className={`w-full rounded-xl border px-3 py-2 text-xs outline-none transition-all duration-200 cursor-pointer ${
+                selectedStatus !== "All"
+                  ? "border-app-accent/70 bg-app-accent/10 text-app-accent font-medium shadow-[0_0_12px_rgba(221,191,135,0.18)] ring-1 ring-app-accent/30"
+                  : "border-white/10 bg-black/60 text-white focus:border-app-accent/40"
+              }`}
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt} value={opt} className="bg-stone-900 text-white">{opt}</option>
@@ -689,11 +693,15 @@ export default function LifeClass() {
 
           {/* Habitat Filter */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-app-soft mb-1.5 block">Habitat Environment</label>
+            <label className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 block transition-colors ${selectedHabitat !== "All" ? "text-app-accent" : "text-app-soft"}`}>Habitat Environment</label>
             <select
               value={selectedHabitat}
               onChange={(e) => setSelectedHabitat(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-app-accent transition cursor-pointer"
+              className={`w-full rounded-xl border px-3 py-2 text-xs outline-none transition-all duration-200 cursor-pointer ${
+                selectedHabitat !== "All"
+                  ? "border-app-accent/70 bg-app-accent/10 text-app-accent font-medium shadow-[0_0_12px_rgba(221,191,135,0.18)] ring-1 ring-app-accent/30"
+                  : "border-white/10 bg-black/60 text-white focus:border-app-accent/40"
+              }`}
             >
               {HABITAT_OPTIONS.map((opt) => (
                 <option key={opt} value={opt} className="bg-stone-900 text-white">{opt}</option>
@@ -703,11 +711,15 @@ export default function LifeClass() {
 
           {/* Diet Filter */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-app-soft mb-1.5 block">Dietary Profile</label>
+            <label className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 block transition-colors ${selectedDiet !== "All" ? "text-app-accent" : "text-app-soft"}`}>Dietary Profile</label>
             <select
               value={selectedDiet}
               onChange={(e) => setSelectedDiet(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-app-accent transition cursor-pointer"
+              className={`w-full rounded-xl border px-3 py-2 text-xs outline-none transition-all duration-200 cursor-pointer ${
+                selectedDiet !== "All"
+                  ? "border-app-accent/70 bg-app-accent/10 text-app-accent font-medium shadow-[0_0_12px_rgba(221,191,135,0.18)] ring-1 ring-app-accent/30"
+                  : "border-white/10 bg-black/60 text-white focus:border-app-accent/40"
+              }`}
             >
               {DIET_OPTIONS.map((opt) => (
                 <option key={opt} value={opt} className="bg-stone-900 text-white">{opt}</option>
@@ -717,12 +729,17 @@ export default function LifeClass() {
 
           {/* Family Filter */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-app-soft mb-1.5 block">Taxonomic Family</label>
+            <label className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 block transition-colors ${selectedFamilyFilter !== "All" ? "text-app-accent" : "text-app-soft"}`}>Taxonomic Family</label>
             <select
               value={selectedFamilyFilter}
               onChange={(e) => setSelectedFamilyFilter(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-app-accent transition cursor-pointer"
+              className={`w-full rounded-xl border px-3 py-2 text-xs outline-none transition-all duration-200 cursor-pointer ${
+                selectedFamilyFilter !== "All"
+                  ? "border-app-accent/70 bg-app-accent/10 text-app-accent font-medium shadow-[0_0_12px_rgba(221,191,135,0.18)] ring-1 ring-app-accent/30"
+                  : "border-white/10 bg-black/60 text-white focus:border-app-accent/40"
+              }`}
             >
+              <option value="All" className="bg-stone-900 text-white">All Families</option>
               {families.map((fam) => (
                 <option key={fam} value={fam} className="bg-stone-900 text-white">{fam}</option>
               ))}
