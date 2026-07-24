@@ -197,11 +197,11 @@ export default function Home() {
 
         {/* Content wrapper */}
         <div className="relative z-10 max-w-2xl">
-          <p className="text-[1.05rem] text-app-accent font-semibold tracking-wide uppercase">Welcome to</p>
-          <h1 className="mt-2 font-display text-[clamp(2.8rem,6.5vw,5rem)] leading-[0.9] tracking-[-0.03em] text-white">
+          <p className="text-xs sm:text-[1.05rem] text-app-accent font-semibold tracking-wide uppercase">Welcome to</p>
+          <h1 className="mt-2 font-display text-[clamp(2.2rem,5.5vw,4.5rem)] leading-[0.92] tracking-[-0.03em] text-white">
             Biblos Zoes
           </h1>
-          <p className="mt-3 text-base md:text-lg leading-7 md:leading-8 text-app-muted font-medium">
+          <p className="mt-3 text-sm sm:text-base md:text-lg leading-6 sm:leading-7 md:leading-8 text-app-muted font-medium">
             Your AI-assisted encyclopedia of life.
             <br />
             Explore. Learn. Understand.
@@ -243,14 +243,14 @@ export default function Home() {
 
       <section className="page-grid page-grid-3">
         {/* Card 1: Animal of the Day */}
-        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between min-w-0">
           <div>
-            <div className="flex items-center justify-between">
-              <h2 className="page-section-title flex items-center gap-2">
-                <SunIcon className="h-5 w-5 text-app-accent" />
-                Animal of the Day
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <h2 className="page-section-title flex items-center gap-2 min-w-0">
+                <SunIcon className="h-5 w-5 text-app-accent shrink-0" />
+                <span className="truncate">Animal of the Day</span>
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setDayOffset((o) => o + 1)}
@@ -280,29 +280,29 @@ export default function Home() {
                 )}
               </div>
             </div>
-            <h3 className="mt-4 text-2xl font-semibold text-white">{animalOfDay.commonName}</h3>
-            <p className="mt-1 italic text-app-muted text-sm">{animalOfDay.scientificName}</p>
-            <p className="mt-3 text-sm leading-7 text-app-muted line-clamp-3">{animalOfDay.shortDescription}</p>
+            <h3 className="mt-4 text-xl sm:text-2xl font-semibold text-white truncate">{animalOfDay.commonName}</h3>
+            <p className="mt-1 italic text-app-muted text-xs sm:text-sm truncate">{animalOfDay.scientificName}</p>
+            <p className="mt-3 text-sm leading-6 text-app-muted line-clamp-3">{animalOfDay.shortDescription}</p>
           </div>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link to={`/species/${animalOfDay.id}`} className="primary-button text-sm">
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            <Link to={`/species/${animalOfDay.id}`} className="primary-button text-sm flex-1 justify-center min-w-[8.5rem]">
               Open record
             </Link>
-            <Link to={`/explorer?continent=${encodeURIComponent(animalOfDay.continents[0] ?? "Africa")}`} className="ghost-button text-sm">
+            <Link to={`/explorer?continent=${encodeURIComponent(animalOfDay.continents[0] ?? "Africa")}`} className="ghost-button text-sm flex-1 justify-center min-w-[8.5rem]">
               View home region
             </Link>
           </div>
         </div>
 
         {/* Card 2: Cool Animal Fact */}
-        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between min-w-0">
           <div>
-            <div className="flex items-center justify-between">
-              <h2 className="page-section-title flex items-center gap-2">
-                <SparklesIcon className="h-5 w-5 text-app-accent" />
-                Cool Animal Fact
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <h2 className="page-section-title flex items-center gap-2 min-w-0">
+                <SparklesIcon className="h-5 w-5 text-app-accent shrink-0" />
+                <span className="truncate">Cool Animal Fact</span>
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setFactOffset((o) => o + 1)}
@@ -320,41 +320,41 @@ export default function Home() {
             <div className="mt-4 relative overflow-hidden rounded-[1.5rem] border border-white/8">
               <SpeciesImage animal={coolFactAnimal} className="h-52 w-full" fitClassName="h-52 w-full object-cover" />
             </div>
-            <h3 className="mt-4 text-xl font-semibold text-white">{coolFactAnimal.commonName}</h3>
-            <p className="mt-0.5 italic text-app-muted text-xs">{coolFactAnimal.scientificName}</p>
+            <h3 className="mt-4 text-lg sm:text-xl font-semibold text-white truncate">{coolFactAnimal.commonName}</h3>
+            <p className="mt-0.5 italic text-app-muted text-xs truncate">{coolFactAnimal.scientificName}</p>
             
             {isFactHydrating || !isAnimalHydrated(coolFactAnimal) ? (
               <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft flex items-center gap-3">
                 <RefreshIcon className="h-4 w-4 animate-spin text-app-accent flex-shrink-0" />
-                <span>Hydrating species facts for {coolFactAnimal.commonName}...</span>
+                <span className="line-clamp-2">Hydrating species facts for {coolFactAnimal.commonName}...</span>
               </div>
             ) : (
               <div className="mt-3 rounded-2xl border border-app-accent/20 bg-app-accent/6 p-4 text-sm leading-6 text-app-soft">
                 <span className="font-semibold text-app-accent block mb-1">Did you know?</span>
-                "{coolFact}"
+                <p className="line-clamp-4">"{coolFact}"</p>
               </div>
             )}
           </div>
           <div className="mt-5">
             <Link to={`/species/${coolFactAnimal.id}`} className="ghost-button text-sm w-full flex items-center justify-center gap-2">
-              <SparklesIcon className="h-4 w-4 text-app-accent" />
-              Explore {coolFactAnimal.commonName}
+              <SparklesIcon className="h-4 w-4 text-app-accent shrink-0" />
+              <span className="truncate">Explore {coolFactAnimal.commonName}</span>
             </Link>
           </div>
         </div>
 
         {/* Card 3: Collection Snapshot & Recently Viewed */}
-        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between">
+        <div className="page-card rounded-[1.75rem] p-5 flex flex-col justify-between min-w-0">
           <div>
-            <div className="flex items-center justify-between">
-              <h2 className="page-section-title flex items-center gap-2">
-                <BookmarkSolidIcon className="h-5 w-5 text-app-accent" />
-                Recently Viewed
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <h2 className="page-section-title flex items-center gap-2 min-w-0">
+                <BookmarkSolidIcon className="h-5 w-5 text-app-accent shrink-0" />
+                <span className="truncate">Recently Viewed</span>
               </h2>
               <button
                 type="button"
                 onClick={() => setStorageVersion((v) => v + 1)}
-                className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer"
+                className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-app-muted hover:border-app-accent/40 hover:text-app-accent transition cursor-pointer shrink-0"
                 title="Reload recent collection"
               >
                 <RefreshIcon className="h-3 w-3" />
@@ -364,12 +364,12 @@ export default function Home() {
             <div className="mt-4 grid gap-3">
               {recentlyViewed.length > 0 ? (
                 recentlyViewed.map((animal) => (
-                  <Link key={animal.id} to={`/species/${animal.id}`} className="interactive-card rounded-[1.2rem] border border-white/7 bg-white/[0.03] p-3.5 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-white text-sm">{animal.commonName}</p>
-                      <p className="text-xs italic text-app-muted">{animal.scientificName}</p>
+                  <Link key={animal.id} to={`/species/${animal.id}`} className="interactive-card rounded-[1.2rem] border border-white/7 bg-white/[0.03] p-3.5 flex items-center justify-between gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white text-sm truncate">{animal.commonName}</p>
+                      <p className="text-xs italic text-app-muted truncate">{animal.scientificName}</p>
                     </div>
-                    <span className="text-xs text-app-accent">View →</span>
+                    <span className="text-xs text-app-accent shrink-0">View →</span>
                   </Link>
                 ))
               ) : (

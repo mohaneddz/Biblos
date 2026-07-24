@@ -47,7 +47,7 @@ export function Sidebar({
         </div>
 
 
-        <nav className={`sidebar-nav flex gap-2 overflow-x-auto pb-1 sm:gap-2 lg:grid lg:overflow-visible lg:pb-0 ${collapsed ? "justify-items-center" : ""}`}>
+        <nav className={`sidebar-nav flex gap-1.5 overflow-x-auto pb-1 sm:gap-2 lg:grid lg:overflow-visible lg:pb-0 ${collapsed ? "justify-items-center" : ""}`}>
           {navItems.map(([to, label, Icon]) => (
             <NavLink
               key={to}
@@ -55,9 +55,9 @@ export function Sidebar({
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 [
-                  "flex min-w-max items-center gap-3 rounded-2xl px-4 py-3 text-sm transition sm:text-base lg:min-w-0",
+                  "flex min-w-max items-center gap-2.5 rounded-2xl px-3 py-2 text-xs transition sm:px-4 sm:py-2.5 sm:text-sm lg:text-base lg:min-w-0",
                   collapsed ? "lg:justify-center lg:px-3" : "",
-                  isActive ? "bg-white/9 text-app-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]" : "text-app-muted hover:bg-white/5 hover:text-app-text",
+                  isActive ? "bg-white/9 text-app-text shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] font-medium" : "text-app-muted hover:bg-white/5 hover:text-app-text",
                 ].join(" ")
               }
             >

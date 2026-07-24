@@ -24,25 +24,25 @@ export function PageHeader({ title, description, storageKey, actions }: PageHead
   };
 
   return (
-    <section className="page-card rounded-[1.85rem] p-6 transition-all duration-300 ease-in-out shrink-0">
-      <div className="flex items-start justify-between gap-4">
+    <section className="page-card rounded-[1.85rem] p-4 sm:p-6 transition-all duration-300 ease-in-out shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="page-title select-none flex items-center gap-3">
+          <h1 className="page-title select-none flex flex-wrap items-center gap-2 sm:gap-3">
             {title}
           </h1>
           
           <div
             className={`transition-all duration-300 ease-in-out overflow-hidden ${
-              isCollapsed ? "max-h-0 opacity-0 mt-0" : "max-h-[12rem] opacity-100 mt-3"
+              isCollapsed ? "max-h-0 opacity-0 mt-0" : "max-h-[14rem] opacity-100 mt-2.5"
             }`}
           >
             <div className="page-lede text-app-muted pr-2 leading-relaxed">{description}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-start">
           <div
-            className={`transition-all duration-300 ease-in-out overflow-hidden flex gap-2 ${
+            className={`transition-all duration-300 ease-in-out overflow-hidden flex flex-wrap gap-2 ${
               isCollapsed ? "max-h-0 opacity-0 pointer-events-none" : "opacity-100"
             }`}
           >
@@ -52,7 +52,7 @@ export function PageHeader({ title, description, storageKey, actions }: PageHead
           <button
             type="button"
             onClick={toggle}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-app-soft hover:bg-white/[0.08] hover:text-white transition duration-200 cursor-pointer select-none shrink-0"
             title={isCollapsed ? "Show page description" : "Hide page description"}
           >
             {isCollapsed ? (
