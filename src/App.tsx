@@ -19,7 +19,7 @@ import TreeOfLife from "./pages/TreeOfLife";
 import TraitDetail from "./pages/TraitDetail";
 
 function ScrollToTop() {
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -27,7 +27,7 @@ function ScrollToTop() {
     if (contentShell) {
       contentShell.scrollTop = 0;
     }
-  }, [pathname, search]);
+  }, [pathname]);
 
   return null;
 }
