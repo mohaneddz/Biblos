@@ -30,7 +30,7 @@ export default function Compare() {
   useEffect(() => {
     if (urlLeft && urlLeft !== leftId) setLeftId(urlLeft);
     if (urlRight && urlRight !== rightId) setRightId(urlRight);
-  }, [urlLeft, urlRight]);
+  }, [urlLeft, urlRight, leftId, rightId]);
 
   // Hydrate Left Animal profile from 21k index / static / cache
   useEffect(() => {

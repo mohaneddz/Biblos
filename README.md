@@ -12,7 +12,6 @@ Biblos is a Tauri desktop application for exploring species, ecosystems, taxonom
 ![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Three.js](https://img.shields.io/badge/Three.js-000000?style=for-the-badge&logo=threedotjs&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 
 ---
@@ -24,9 +23,7 @@ Biblos is a Tauri desktop application for exploring species, ecosystems, taxonom
 - Personal collections and folders
 - Optional live data and media services, including GBIF, iNaturalist, Wikipedia, and YouTube
 - AI Naturalist workspace and natural-language species tooling
-- 3D species viewer powered by React Three Fiber and Drei
-- Image drop area and local background-removal capability
-- Rust index-seeding command for local data setup
+- Rust index-seeding command for local data setup, bundled with a pre-seeded species database
 
 ---
 
@@ -76,21 +73,21 @@ src-tauri/
 ### Prerequisites
 
 - Node.js 18+
-- npm
+- pnpm
 - Rust toolchain
 - Tauri system dependencies for your operating system
 
 ### Install and run
 
 ```bash
-npm install
-npm run tauri dev
+pnpm install
+pnpm tauri dev
 ```
 
 For frontend-only development:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 The Vite server is configured for `http://localhost:8668`.
@@ -100,11 +97,12 @@ The Vite server is configured for `http://localhost:8668`.
 ## Available Scripts
 
 ```bash
-npm run dev          # Start Vite
-npm run build        # Type-check and build frontend assets
-npm run preview      # Preview the production frontend build
-npm run tauri dev    # Run the desktop app
-npm run seed:index   # Run the Biblos Rust index seeder
+pnpm dev           # Start Vite
+pnpm build         # Type-check and build frontend assets
+pnpm preview       # Preview the production frontend build
+pnpm tauri dev     # Run the desktop app
+pnpm tauri build   # Build the production desktop bundle
+pnpm seed:index    # Run the Biblos Rust index seeder
 ```
 
 ---
