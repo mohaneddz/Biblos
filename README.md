@@ -33,49 +33,33 @@ Biblos is a Tauri desktop application for exploring species, ecosystems, taxonom
 
 **Home:** Search the species directory, access quick portal actions, and view daily animal highlights and recently explored records.
 
----
-
 <img src="screenshots/species.avif" alt="Biblos species directory view" width="88%"/>
 
 **Species:** Search and filter thousands of indexed species records using real-time taxonomy, habitat, diet, and conservation status filters.
-
----
 
 <img src="screenshots/tree-of-life.avif" alt="Biblos tree of life view" width="88%"/>
 
 **Tree of Life:** Navigate global biological classification and animal classes through an interactive hierarchical taxonomy tree.
 
----
-
 <img src="screenshots/explorer.avif" alt="Biblos explorer view" width="88%"/>
 
 **Explorer:** Discover Earth's wildlife across biomes, dietary patterns, activity rhythms, conservation tiers, and geographic regions.
-
----
 
 <img src="screenshots/ecosystem.avif" alt="Biblos ecosystems view" width="88%"/>
 
 **Ecosystems:** Browse global biomes and detailed habitat records alongside their representative species.
 
----
-
 <img src="screenshots/chatbot.avif" alt="Biblos AI naturalist chatbot view" width="88%"/>
 
 **AI Naturalist:** Consult an intelligent conversational AI assistant for natural-history insights and detailed species analysis.
-
----
 
 <img src="screenshots/compare.avif" alt="Biblos species comparison view" width="88%"/>
 
 **Compare:** Perform side-by-side comparative analysis of species physical traits, habitats, diets, and taxonomy.
 
----
-
 <img src="screenshots/collection.avif" alt="Biblos collection and folders view" width="88%"/>
 
 **Collection:** Organize starred favorites, bookmarked species records, and custom research folders.
-
----
 
 <img src="screenshots/settings.avif" alt="Biblos settings view" width="88%"/>
 
