@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { animalMap, animals } from "../data/animals";
-import { getCachedSpecies, setCachedSpecies } from "./cache";
+import { getCachedSpecies, getSettings, setCachedSpecies } from "./cache";
 import type { ActivityPattern, Animal, ConservationStatus, Continent } from "../types/animal";
 import type { SpeciesSearchHit, SearchResponse, HydratedProfileResponse } from "../types/speciesStore";
 import { hydrateSpeciesWithAI } from "./aiSpeciesService";
@@ -346,9 +346,12 @@ export async function hydrateSpeciesProfile(id: string, forceRefresh = false) {
 
   let response: HydratedProfileResponse;
   try {
+    const settings = getSettings();
     response = await invoke<HydratedProfileResponse>("hydrate_species_profile", {
       id,
       forceRefresh,
+      groqApiKey: settings.groqApiKey?.trim() || null,
+      model: settings.aiModel || null,
     });
   } catch (err) {
     // Expected for GBIF species — the Tauri backend doesn't store arbitrary GBIF IDs.

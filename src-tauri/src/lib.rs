@@ -80,10 +80,18 @@ async fn hydrate_species_profile(
     app: tauri::AppHandle,
     id: String,
     force_refresh: Option<bool>,
+    groq_api_key: Option<String>,
+    model: Option<String>,
 ) -> Result<SpeciesProfilePayload, String> {
-    species_store::get_or_hydrate_profile(Some(&app), &id, force_refresh.unwrap_or(false))
-        .await
-        .map_err(|error| error.to_string())
+    species_store::get_or_hydrate_profile(
+        Some(&app),
+        &id,
+        force_refresh.unwrap_or(false),
+        groq_api_key.as_deref(),
+        model.as_deref(),
+    )
+    .await
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -1644,11 +1644,23 @@ fn infer_conservation_status(raw: &[String], gbif: &GbifSpeciesDetails) -> &'sta
 
 fn infer_diet(text: &str) -> &'static str {
     let value = normalize(text);
-    if value.contains("herbiv") {
+    // Check specific diet categories before the broad herbivore/omnivore/carnivore
+    // buckets — e.g. "frugivore" and "resident frugivore" never contain "herbiv".
+    if value.contains("frugivor") {
+        "Frugivore"
+    } else if value.contains("piscivor") {
+        "Piscivore"
+    } else if value.contains("insectivor") {
+        "Insectivore"
+    } else if value.contains("filter feed") || value.contains("filter-feed") || value.contains("planktivor") {
+        "Filter Feeder"
+    } else if value.contains("detritivor") || value.contains("scaveng") {
+        "Detritivore"
+    } else if value.contains("herbiv") || value.contains("folivor") || value.contains("granivor") || value.contains("nectarivor") {
         "Herbivore"
     } else if value.contains("omniv") {
         "Omnivore"
-    } else if value.contains("carniv") || value.contains("predator") {
+    } else if value.contains("carniv") || value.contains("predator") || value.contains("prey on") || value.contains("preys on") {
         "Carnivore"
     } else {
         "Unknown"
@@ -1659,11 +1671,11 @@ fn infer_activity(text: &str) -> &'static str {
     let value = normalize(text);
     if value.contains("nocturn") {
         "Nocturnal"
-    } else if value.contains("crepus") {
+    } else if value.contains("crepus") || value.contains("dawn and dusk") || value.contains("dusk and dawn") {
         "Crepuscular"
     } else if value.contains("cathemer") {
         "Cathemeral"
-    } else if value.contains("diurn") {
+    } else if value.contains("diurn") || value.contains("active during the day") || value.contains("active by day") {
         "Diurnal"
     } else {
         "Unknown"
@@ -1688,6 +1700,10 @@ fn infer_habitat(parts: &[String], gbif: &GbifSpeciesDetails) -> Vec<String> {
         "rainforest",
         "mangrove",
         "urban",
+        "reef",
+        "river",
+        "lake",
+        "cave",
     ] {
         if parts.iter().any(|part| normalize(part).contains(keyword)) {
             habitats.push(keyword.to_string());
@@ -1701,24 +1717,106 @@ fn infer_habitat(parts: &[String], gbif: &GbifSpeciesDetails) -> Vec<String> {
     habitats
 }
 
-async fn groq_enrich(raw: &Value) -> Option<Value> {
+/// Coarse keyword-based continent/region inference from raw reference text
+/// (Wikipedia extract, Wikidata description, GBIF habitat/threat fields).
+/// Used only when the Groq normalization pass is unavailable or fails — a
+/// best-effort fallback, not authoritative range data.
+fn infer_continents(parts: &[String]) -> Vec<String> {
+    let joined = normalize(&parts.join(" "));
+    let checks: &[(&str, &str)] = &[
+        ("north america", "North America"),
+        ("south america", "South America"),
+        ("central america", "South America"),
+        ("africa", "Africa"),
+        ("madagascar", "Africa"),
+        ("sahara", "Africa"),
+        ("sub-saharan", "Africa"),
+        ("europe", "Europe"),
+        ("scandinavia", "Europe"),
+        ("mediterranean", "Europe"),
+        ("united kingdom", "Europe"),
+        ("britain", "Europe"),
+        ("asia", "Asia"),
+        ("himalaya", "Asia"),
+        ("siberia", "Asia"),
+        ("southeast asia", "Asia"),
+        ("indian subcontinent", "Asia"),
+        ("china", "Asia"),
+        ("india", "Asia"),
+        ("japan", "Asia"),
+        ("australia", "Australia"),
+        ("oceania", "Australia"),
+        ("new guinea", "Australia"),
+        ("new zealand", "Australia"),
+        ("antarctica", "Antarctica"),
+        ("antarctic", "Antarctica"),
+        ("pacific ocean", "Oceans"),
+        ("atlantic ocean", "Oceans"),
+        ("indian ocean", "Oceans"),
+        ("arctic ocean", "Oceans"),
+        ("indo-pacific", "Oceans"),
+        ("pelagic", "Oceans"),
+        ("amazon", "South America"),
+        ("brazil", "South America"),
+        ("andes", "South America"),
+    ];
+
+    let mut found: Vec<String> = checks
+        .iter()
+        .filter(|(needle, _)| joined.contains(needle))
+        .map(|(_, continent)| continent.to_string())
+        .collect();
+    found.sort();
+    found.dedup();
+    if found.is_empty() {
+        found.push("Unknown".into());
+    }
+    found
+}
+
+async fn groq_enrich(raw: &Value, api_key_override: Option<&str>, model: Option<&str>) -> Option<Value> {
     dotenvy::dotenv().ok();
-    let api_key = env::var("GROQ_API_KEY").ok()?;
+    // Settings-configured key (from the frontend) takes priority; .env is only
+    // the fallback for users who never opened Settings.
+    let api_key = api_key_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| env::var("GROQ_API_KEY").ok())?;
     if api_key.trim().is_empty() {
         return None;
     }
 
     let client = Client::builder().user_agent("Biblos/0.7").build().ok()?;
+    // Mirrors the schema used by the manual "Enrich with AI" action (aiSpeciesService.ts)
+    // so the automatic, on-open hydration reaches the same completeness — including the
+    // numeric fields (lifespan/size/weight) the raw APIs rarely provide directly.
     let prompt = format!(
-        "You are normalizing animal encyclopedia data. Only use the raw facts provided. Return strict JSON with keys short_description, detailed_description, habitat, diet, activity_pattern, conservation_status, continents, cool_facts. Use null or 'Unknown' when unsupported. Raw data: {}",
+        "You are a world-class zoologist normalizing animal encyclopedia data. Ground short_description, \
+        detailed_description, habitat, cool_facts, and conservation_status in the raw reference facts provided. \
+        For diet, activity_pattern, continents, and the numeric fields, use the raw facts when present, otherwise \
+        estimate from known family/order biology — never output 'Unknown' or null for a field unless truly nothing \
+        can be reasonably inferred. Return ONLY a raw JSON object with exactly these keys: \
+        short_description (1 sentence), detailed_description (3-5 sentences), \
+        habitat (array of 2-3 specific habitat types), \
+        diet (one of: Herbivore, Carnivore, Omnivore, Insectivore, Piscivore, Frugivore, Filter Feeder, Detritivore, Scavenger), \
+        activity_pattern (one of: Diurnal, Nocturnal, Crepuscular, Cathemeral), \
+        conservation_status (one of: Least Concern, Near Threatened, Vulnerable, Endangered, Critically Endangered, Extinct, Data Deficient), \
+        continents (array of continents/oceans where found), \
+        cool_facts (array of 3-5 specific facts), \
+        average_lifespan_years (number, estimate from family/order averages if exact data is unavailable), \
+        length_cm (number or null), height_cm (number or null), wingspan_cm (number or null, birds/bats/insects only), \
+        weight_kg (number, estimate from family/order averages if exact data is unavailable). \
+        Raw reference data: {}",
         raw
     );
 
     let body = json!({
-        "model": "llama-3.3-70b-versatile",
-        "temperature": 0.1,
+        "model": model.filter(|value| !value.trim().is_empty()).unwrap_or("llama-3.3-70b-versatile"),
+        "temperature": 0.2,
+        "response_format": { "type": "json_object" },
         "messages": [
-            {"role": "system", "content": "Return only valid JSON. Do not invent facts."},
+            {"role": "system", "content": "Return only a single valid JSON object matching the requested schema. No markdown, no commentary, no code fences."},
             {"role": "user", "content": prompt}
         ]
     });
@@ -1751,7 +1849,11 @@ fn string_array(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-async fn hydrate_species_record(record: &IndexRecord) -> Result<Value> {
+async fn hydrate_species_record(
+    record: &IndexRecord,
+    groq_api_key: Option<&str>,
+    groq_model: Option<&str>,
+) -> Result<Value> {
     let client = Client::builder().user_agent("Biblos/0.7").build()?;
     let gbif_details: GbifSpeciesDetails = fetch_json(
         &client,
@@ -1854,7 +1956,7 @@ async fn hydrate_species_record(record: &IndexRecord) -> Result<Value> {
         "source_urls": sources,
     });
 
-    let ai = groq_enrich(&raw_payload).await;
+    let ai = groq_enrich(&raw_payload, groq_api_key, groq_model).await;
     let summary_text = ai
         .as_ref()
         .and_then(|value| value.get("short_description"))
@@ -1924,18 +2026,29 @@ async fn hydrate_species_record(record: &IndexRecord) -> Result<Value> {
     let continents = {
         let from_ai = string_array(ai.as_ref().and_then(|value| value.get("continents")));
         if from_ai.is_empty() {
-            vec!["Unknown".into()]
+            infer_continents(&raw_text_parts)
         } else {
             from_ai
         }
     };
+
+    // Rarely present in GBIF/Wikipedia/iNat raw data — only the AI pass can
+    // reasonably fill these, so they stay null when no key is configured.
+    let average_lifespan_years = ai
+        .as_ref()
+        .and_then(|value| value.get("average_lifespan_years"))
+        .and_then(Value::as_f64);
+    let length_cm = ai.as_ref().and_then(|value| value.get("length_cm")).and_then(Value::as_f64);
+    let height_cm = ai.as_ref().and_then(|value| value.get("height_cm")).and_then(Value::as_f64);
+    let wingspan_cm = ai.as_ref().and_then(|value| value.get("wingspan_cm")).and_then(Value::as_f64);
+    let weight_kg = ai.as_ref().and_then(|value| value.get("weight_kg")).and_then(Value::as_f64);
 
     Ok(json!({
         "id": make_species_id(record.gbif_taxon_key),
         "gbifTaxonKey": record.gbif_taxon_key,
         "commonName": record.common_name.clone().unwrap_or_else(|| record.canonical_name.clone()),
         "scientificName": record.scientific_name,
-        "averageLifespanYears": Value::Null,
+        "averageLifespanYears": average_lifespan_years,
         "shortDescription": summary_text,
         "detailedDescription": detail_text,
         "coolFacts": cool_facts,
@@ -1954,11 +2067,11 @@ async fn hydrate_species_record(record: &IndexRecord) -> Result<Value> {
         "continents": continents,
         "conservationStatus": conservation_status,
         "size": {
-            "lengthCm": Value::Null,
-            "heightCm": Value::Null,
-            "wingspanCm": Value::Null
+            "lengthCm": length_cm,
+            "heightCm": height_cm,
+            "wingspanCm": wingspan_cm
         },
-        "weightKg": Value::Null,
+        "weightKg": weight_kg,
         "images": hero_image.clone().map(|value| vec![value]).unwrap_or_default(),
         "heroImage": hero_image,
         "has3DModel": false,
@@ -2005,6 +2118,8 @@ pub async fn get_or_hydrate_profile(
     app: Option<&AppHandle>,
     id: &str,
     force_refresh: bool,
+    groq_api_key: Option<&str>,
+    groq_model: Option<&str>,
 ) -> Result<SpeciesProfilePayload> {
     let path = initialize_database(app)?;
     let connection = open_connection(&path)?;
@@ -2022,7 +2137,7 @@ pub async fn get_or_hydrate_profile(
     let record = get_index_record(&connection, gbif_taxon_key)?
         .ok_or_else(|| anyhow!("species index entry {gbif_taxon_key} not found"))?;
 
-    let animal = match hydrate_species_record(&record).await {
+    let animal = match hydrate_species_record(&record, groq_api_key, groq_model).await {
         Ok(animal) => animal,
         Err(_) => json!({
             "id": make_species_id(record.gbif_taxon_key),

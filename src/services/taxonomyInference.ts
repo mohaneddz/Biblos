@@ -345,7 +345,7 @@ export function inferContinentsFromHit(hit: Partial<SpeciesSearchHit>): Continen
   const animalClass = inferClassFromHit(hit);
   if (animalClass === "Chondrichthyes" || animalClass === "Cephalopoda") return ["Oceans"];
 
-  return ["Africa", "Asia"];
+  return ["Unknown"];
 }
 
 export function inferConservationStatusFromHit(hit: Partial<SpeciesSearchHit>): ConservationStatus {
