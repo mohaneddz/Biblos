@@ -231,9 +231,6 @@ async fn fetch_image_base64(url: String) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             initialize_species_store,
             seed_species_store,

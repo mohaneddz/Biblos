@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { Animal } from "../types/animal";
 import { animals } from "../data/animals";
 import { getAllCachedSpecies } from "../services/cache";
@@ -48,12 +48,12 @@ export function CompareSpeciesSelect({
   }, [isOpen]);
 
   // Initial candidate list (static animals + cached species)
-  const defaultAnimals = useState(() => {
+  const defaultAnimals = useMemo(() => {
     const map = new Map<string, Animal>();
     for (const a of animals) map.set(a.id, a);
     for (const a of getAllCachedSpecies()) map.set(a.id, a);
     return [...map.values()];
-  })[0];
+  }, []);
 
   // Perform search against local DB + static / cached animals when query changes
   useEffect(() => {

@@ -268,13 +268,22 @@ pub fn db_path_for_app(app: Option<&AppHandle>) -> Result<PathBuf> {
             .map_err(|error| anyhow!("failed to resolve app data dir: {error}"))?;
         fs::create_dir_all(&dir)?;
         let target_path = dir.join("biblos.sqlite3");
-        let bundled_path = PathBuf::from("src-tauri").join("biblos.sqlite3");
+        let mut potential_bundles = vec![
+            PathBuf::from("src-tauri").join("biblos.sqlite3"),
+            PathBuf::from("biblos.sqlite3"),
+        ];
+        if let Ok(res_dir) = app.path().resource_dir() {
+            potential_bundles.push(res_dir.join("biblos.sqlite3"));
+        }
 
-        if bundled_path.exists() {
-            let bundled_size = fs::metadata(&bundled_path).map(|m| m.len()).unwrap_or(0);
-            let target_size = fs::metadata(&target_path).map(|m| m.len()).unwrap_or(0);
-            if bundled_size > target_size {
-                let _ = fs::copy(&bundled_path, &target_path);
+        for bundled_path in potential_bundles {
+            if bundled_path.exists() {
+                let bundled_size = fs::metadata(&bundled_path).map(|m| m.len()).unwrap_or(0);
+                let target_size = fs::metadata(&target_path).map(|m| m.len()).unwrap_or(0);
+                if bundled_size > target_size {
+                    let _ = fs::copy(&bundled_path, &target_path);
+                    break;
+                }
             }
         }
         return Ok(target_path);
@@ -437,6 +446,7 @@ fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, St
         .unwrap_or_default();
     let scientific = normalize(&record.scientific_name);
     let canonical = normalize(&record.canonical_name);
+    let normalized_aliases: Vec<String> = record.aliases.iter().map(|a| normalize(a)).collect();
 
     if !common.is_empty() && common == q {
         return (300.0, "exact_common".into());
@@ -446,9 +456,8 @@ fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, St
     }
 
     // Check alias exact match (synonyms, alternate vernacular names)
-    for alias in &record.aliases {
-        let alias_norm = normalize(alias);
-        if !alias_norm.is_empty() && alias_norm == q {
+    for alias in &normalized_aliases {
+        if !alias.is_empty() && alias == &q {
             return (280.0, "exact_alias".into());
         }
     }
@@ -460,14 +469,12 @@ fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, St
         return (200.0, "prefix_scientific".into());
     }
     // Alias prefix match
-    for alias in &record.aliases {
-        let alias_norm = normalize(alias);
-        if !alias_norm.is_empty() && alias_norm.starts_with(&q) {
+    for alias in &normalized_aliases {
+        if !alias.is_empty() && alias.starts_with(&q) {
             return (190.0, "prefix_alias".into());
         }
     }
 
-    let alias_refs: Vec<&str> = record.aliases.iter().map(|a| a.as_str()).collect();
     let mut fuzzy_candidates = vec![
         common.as_str(),
         scientific.as_str(),
@@ -476,7 +483,9 @@ fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, St
         record.genus.as_deref().unwrap_or(""),
         record.class_name.as_deref().unwrap_or(""),
     ];
-    fuzzy_candidates.extend_from_slice(&alias_refs);
+    for alias in &normalized_aliases {
+        fuzzy_candidates.push(alias.as_str());
+    }
 
     let fuzzy = best_similarity(&q, &fuzzy_candidates);
     let token_bonus = q
@@ -484,7 +493,7 @@ fn score_local_hit(record: &IndexRecord, query: &str, fts_rank: f64) -> (f64, St
         .filter(|token| !token.is_empty())
         .map(|token| {
             let token = token.trim();
-            let alias_hit = record.aliases.iter().any(|a| normalize(a).contains(token));
+            let alias_hit = normalized_aliases.iter().any(|a| a.contains(token));
             if common.contains(token)
                 || scientific.contains(token)
                 || canonical.contains(token)
@@ -547,7 +556,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 }
 
 fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
-    let aliases_raw: Option<String> = row.get("aliases").unwrap_or(None);
+    let aliases_raw: Option<String> = row.get("aliases").ok().flatten();
     let aliases = aliases_raw
         .as_deref()
         .unwrap_or("")
@@ -561,10 +570,11 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
         canonical_name: row.get("canonical_name")?,
         common_name: row.get("common_name")?,
         aliases,
-        inat_taxon_id: row.get("inat_taxon_id").unwrap_or(None),
+        inat_taxon_id: row.get("inat_taxon_id").ok().flatten(),
         popularity_score: row
             .get::<_, Option<f64>>("popularity_score")
-            .unwrap_or(None)
+            .ok()
+            .flatten()
             .unwrap_or(0.0),
         rank: row.get("rank")?,
         kingdom: row.get("kingdom")?,
@@ -573,11 +583,11 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexRecord> {
         order_name: row.get("order_name")?,
         family: row.get("family")?,
         genus: row.get("genus")?,
-        habitat: row.get("habitat").unwrap_or(None),
-        diet: row.get("diet").unwrap_or(None),
-        activity_pattern: row.get("activity_pattern").unwrap_or(None),
-        conservation_status: row.get("conservation_status").unwrap_or(None),
-        continents: row.get("continents").unwrap_or(None),
+        habitat: row.get("habitat").ok().flatten(),
+        diet: row.get("diet").ok().flatten(),
+        activity_pattern: row.get("activity_pattern").ok().flatten(),
+        conservation_status: row.get("conservation_status").ok().flatten(),
+        continents: row.get("continents").ok().flatten(),
         source: row.get("source")?,
         updated_at: row.get("updated_at")?,
     })
