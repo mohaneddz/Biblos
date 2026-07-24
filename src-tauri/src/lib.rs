@@ -202,6 +202,14 @@ async fn ask_ai_naturalist(
 }
 
 #[tauri::command]
+fn has_groq_env_key() -> bool {
+    dotenvy::dotenv().ok();
+    std::env::var("GROQ_API_KEY")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
 async fn fetch_image_base64(url: String) -> Result<String, String> {
     use base64::Engine;
     let client = Client::builder()
@@ -243,6 +251,7 @@ pub fn run() {
             search_inat_autocomplete,
             parse_query_to_filters,
             ask_ai_naturalist,
+            has_groq_env_key,
             fetch_image_base64,
         ])
         .run(tauri::generate_context!())

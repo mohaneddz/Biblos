@@ -3,12 +3,12 @@ import { getSpeciesMedia, type SpeciesMediaMode } from "../services/speciesMedia
 import type { Animal } from "../types/animal";
 import type { SpeciesMediaBundle } from "../types/media";
 
-export function useSpeciesMedia(animal: Animal | null, mode: SpeciesMediaMode = "full") {
+export function useSpeciesMedia(animal: Animal | null, mode: SpeciesMediaMode = "full", enabled: boolean = true) {
   const [media, setMedia] = useState<SpeciesMediaBundle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(animal) && enabled);
 
   useEffect(() => {
-    if (!animal) {
+    if (!animal || !enabled) {
       setMedia(null);
       setLoading(false);
       return;
@@ -32,7 +32,7 @@ export function useSpeciesMedia(animal: Animal | null, mode: SpeciesMediaMode = 
     return () => {
       active = false;
     };
-  }, [animal, mode]);
+  }, [animal, mode, enabled]);
 
   return {
     media,
