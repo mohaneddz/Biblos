@@ -283,10 +283,28 @@ export function inferHabitatFromHit(hit: Partial<SpeciesSearchHit>): string {
 export function inferDietFromHit(hit: Partial<SpeciesSearchHit>): string {
   const text = `${hit.common_name || ""} ${hit.canonical_name || ""} ${hit.family || ""} ${hit.order_name || ""}`.toLowerCase();
 
-  if (text.includes("eagle") || text.includes("hawk") || text.includes("falcon") || text.includes("owl") || text.includes("shark") || text.includes("wolf") || text.includes("lion") || text.includes("tiger") || text.includes("leopard") || text.includes("jaguar") || text.includes("snake") || text.includes("viper") || text.includes("crocodile") || text.includes("alligator")) return "Carnivore";
-  if (text.includes("whale") || text.includes("dolphin") || text.includes("seal") || text.includes("otter") || text.includes("penguin") || text.includes("kingfisher") || text.includes("pelican") || text.includes("heron")) return "Carnivore";
+  // Piscivore
+  if (text.includes("piscivore") || text.includes("kingfisher") || text.includes("osprey") || text.includes("pelican") || text.includes("heron") || text.includes("cormorant") || text.includes("otter") || text.includes("seal") || text.includes("walrus") || text.includes("sea lion")) return "Piscivore";
+
+  // Filter Feeder
+  if (text.includes("filter feeder") || text.includes("plankton") || text.includes("krill") || text.includes("baleen") || text.includes("basking shark") || text.includes("whale shark") || text.includes("manta ray")) return "Filter Feeder";
+
+  // Detritivore
+  if (text.includes("detritivore") || text.includes("earthworm") || text.includes("fungus") || text.includes("mushroom") || text.includes("decay")) return "Detritivore";
+
+  // Autotroph
+  if (text.includes("autotroph") || text.includes("plant") || text.includes("algae") || text.includes("tree") || text.includes("moss") || text.includes("fern")) return "Autotroph";
+
+  // General Carnivores
+  if (text.includes("eagle") || text.includes("hawk") || text.includes("falcon") || text.includes("owl") || text.includes("shark") || text.includes("wolf") || text.includes("lion") || text.includes("tiger") || text.includes("leopard") || text.includes("jaguar") || text.includes("snake") || text.includes("viper") || text.includes("crocodile") || text.includes("alligator") || text.includes("whale") || text.includes("dolphin")) return "Carnivore";
+
+  // Herbivores
   if (text.includes("deer") || text.includes("cow") || text.includes("sheep") || text.includes("goat") || text.includes("giraffe") || text.includes("zebra") || text.includes("elephant") || text.includes("rhino") || text.includes("hippo") || text.includes("rabbit") || text.includes("hare") || text.includes("sloth") || text.includes("koala") || text.includes("kangaroo") || text.includes("panda")) return "Herbivore";
-  if (text.includes("bat") || text.includes("frog") || text.includes("toad") || text.includes("chameleon") || text.includes("anteater") || text.includes("pangolin") || text.includes("spider") || text.includes("dragonfly")) return "Insectivore";
+
+  // Insectivores
+  if (text.includes("bat") || text.includes("frog") || text.includes("toad") || text.includes("chameleon") || text.includes("anteater") || text.includes("pangolin") || text.includes("spider") || text.includes("dragonfly") || text.includes("insect") || text.includes("wasp") || text.includes("bee") || text.includes("ant")) return "Insectivore";
+
+  // Omnivores & Frugivores
   if (text.includes("toucan") || text.includes("parrot") || text.includes("macaw") || text.includes("fruit bat")) return "Omnivore";
   if (text.includes("bear") || text.includes("pig") || text.includes("boar") || text.includes("monkey") || text.includes("chimpanzee") || text.includes("human") || text.includes("rat") || text.includes("mouse") || text.includes("crow") || text.includes("raven")) return "Omnivore";
 
@@ -296,7 +314,7 @@ export function inferDietFromHit(hit: Partial<SpeciesSearchHit>): string {
 
   const animalClass = inferClassFromHit(hit);
   if (animalClass === "Reptilia" || animalClass === "Chondrichthyes" || animalClass === "Cephalopoda") return "Carnivore";
-  if (animalClass === "Actinopterygii") return "Carnivore";
+  if (animalClass === "Actinopterygii") return "Piscivore";
   if (animalClass === "Amphibia" || animalClass === "Insecta" || animalClass === "Arachnida") return "Insectivore";
 
   return "Omnivore";
@@ -333,10 +351,11 @@ export function inferContinentsFromHit(hit: Partial<SpeciesSearchHit>): Continen
 export function inferConservationStatusFromHit(hit: Partial<SpeciesSearchHit>): ConservationStatus {
   const text = `${hit.common_name || ""} ${hit.canonical_name || ""}`.toLowerCase();
 
-  if (text.includes("rhino") || text.includes("gorilla") || text.includes("orangutan") || text.includes("saola") || text.includes("vaquita") || text.includes("kakapo")) return "Critically Endangered";
+  if (text.includes("axolotl") || text.includes("vaquita") || text.includes("saola") || text.includes("kakapo") || text.includes("rhino") || text.includes("gorilla") || text.includes("orangutan")) return "Critically Endangered";
   if (text.includes("tiger") || text.includes("snow leopard") || text.includes("panda") || text.includes("asian elephant") || text.includes("blue whale") || text.includes("tasmanian devil")) return "Endangered";
   if (text.includes("lion") || text.includes("cheetah") || text.includes("hippo") || text.includes("polar bear") || text.includes("dugong") || text.includes("great white shark")) return "Vulnerable";
   if (text.includes("jaguar") || text.includes("narwhal") || text.includes("platypus")) return "Near Threatened";
+  if (text.includes("dodo") || text.includes("mammoth") || text.includes("thylacine") || text.includes("passenger pigeon") || text.includes("extinct")) return "Extinct";
 
   return "Least Concern";
 }

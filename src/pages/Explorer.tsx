@@ -143,7 +143,7 @@ const DIET_CARDS = [
     label: "Piscivore",
     desc: "Fish-eating hunters",
     icon: MarineIcon,
-    imageUrl: "https://images.unsplash.com/photo-1552728089-57bdde30beb3?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1551085254-e96b210db58a?auto=format&fit=crop&w=1200&q=80",
   },
   {
     key: "filter feeder",
@@ -210,7 +210,7 @@ const CONSERVATION_CARDS = [
     label: "Extinct",
     desc: "No remaining individuals",
     icon: ShieldIcon,
-    imageUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80",
   },
 ];
 
@@ -721,7 +721,7 @@ export default function Explorer() {
                   const next = new URLSearchParams(prev);
                   next.set("continent", continent);
                   return next;
-                })}
+                }, { preventScrollReset: true })}
                 className={`group relative flex flex-col justify-end overflow-hidden rounded-[1.4rem] border p-4 text-left transition duration-300 aspect-[16/10] cursor-pointer ${
                   isSelected ? "border-app-accent bg-app-accent/15 shadow-xl scale-[1.02]" : "border-white/12 bg-[#060a08] hover:border-app-accent/40 hover:scale-[1.01]"
                 }`}
@@ -811,7 +811,7 @@ export default function Explorer() {
                   const next = new URLSearchParams(prev);
                   next.set("continent", cName);
                   return next;
-                })}
+                }, { preventScrollReset: true })}
                 className={`px-3.5 py-1.5 text-xs rounded-lg border transition cursor-pointer font-medium select-none ${
                   isCurrent
                     ? "border-app-accent/80 bg-app-accent/25 text-app-accent font-bold shadow-md"
@@ -853,7 +853,7 @@ export default function Explorer() {
                                 const next = new URLSearchParams(prev);
                                 next.set("continent", continent);
                                 return next;
-                              });
+                              }, { preventScrollReset: true });
                             }
                           }}
                           style={{

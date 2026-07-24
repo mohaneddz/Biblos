@@ -73,7 +73,7 @@ const TRAIT_CONFIGS: Record<string, TraitConfig> = {
     gradient: "from-[#081012] via-[#060c0e] to-[#040705]",
     icon: GlobeGridIcon,
     badge: "Dietary Profile",
-    imageUrl: "https://images.unsplash.com/photo-1552728089-57bdde30beb3?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1551085254-e96b210db58a?auto=format&fit=crop&w=1600&q=80",
   },
   "filter feeder": {
     title: "Filter Feeder",
@@ -156,7 +156,7 @@ const TRAIT_CONFIGS: Record<string, TraitConfig> = {
     gradient: "from-[#0c0c0c] via-[#080808] to-[#040705]",
     icon: LeafClusterIcon,
     badge: "IUCN Conservation Status",
-    imageUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80",
   },
 
   // Activity Patterns
@@ -221,17 +221,34 @@ export default function TraitDetail({ traitCategory }: { traitCategory?: TraitCa
     return () => window.removeEventListener("biblos-cache-updated", handler);
   }, []);
 
-  // Fetch SQLite species hits matching this trait
+  // Fetch SQLite species hits matching this trait (with synonym expansion)
   useEffect(() => {
-    searchSpeciesLocal(config.title, 300, 0)
-      .then((res) => {
-        if (res && res.hits && res.hits.length > 0) {
-          const preview = res.hits.map(previewAnimalFromHit);
+    const terms = [config.title];
+    if (config.category === "diet") {
+      if (normalizedKey === "piscivore") terms.push("fish", "kingfisher", "osprey", "otter", "seal");
+      else if (normalizedKey === "filter feeder") terms.push("whale", "krill", "plankton", "manta");
+      else if (normalizedKey === "insectivore") terms.push("insect", "ant", "frog", "bat");
+      else if (normalizedKey === "herbivore") terms.push("herbivore", "deer", "elephant", "panda");
+      else if (normalizedKey === "carnivore") terms.push("carnivore", "lion", "tiger", "wolf");
+      else if (normalizedKey === "detritivore") terms.push("worm", "fungi", "soil");
+      else if (normalizedKey === "autotroph") terms.push("plant", "algae", "tree");
+    } else if (config.category === "status") {
+      if (normalizedKey === "extinct") terms.push("extinct", "dodo", "mammoth");
+      else if (normalizedKey === "critically endangered") terms.push("critically endangered", "axolotl", "rhino");
+      else if (normalizedKey === "endangered") terms.push("endangered", "tiger", "panda");
+      else if (normalizedKey === "vulnerable") terms.push("vulnerable", "lion", "cheetah");
+    }
+
+    Promise.all(terms.map((t) => searchSpeciesLocal(t, 200, 0)))
+      .then((results) => {
+        const hits = results.flatMap((r) => r?.hits ?? []);
+        if (hits.length > 0) {
+          const preview = hits.map(previewAnimalFromHit);
           setDbSpecies(preview);
         }
       })
       .catch(() => {});
-  }, [config.title]);
+  }, [config.title, config.category, normalizedKey]);
 
   const availableAnimals = useMemo(() => {
     const hidden = getHiddenSpecies();
@@ -247,17 +264,26 @@ export default function TraitDetail({ traitCategory }: { traitCategory?: TraitCa
     const term = normalize(config.title);
     return availableAnimals.filter((a) => {
       if (config.category === "diet") {
-        return normalize(a.diet).includes(term) || (a.diet.toLowerCase() === "carnivore" && term === "carnivore");
+        const dietNorm = normalize(a.diet || "");
+        if (dietNorm === term || dietNorm.includes(term)) return true;
+        if (normalizedKey === "piscivore") return dietNorm.includes("piscivore") || dietNorm.includes("fish");
+        if (normalizedKey === "filter feeder") return dietNorm.includes("filter") || dietNorm.includes("plankton");
+        if (normalizedKey === "insectivore") return dietNorm.includes("insectivore") || dietNorm.includes("insect");
+        if (normalizedKey === "carnivore") return dietNorm === "carnivore" || (dietNorm.includes("carnivore") && !dietNorm.includes("piscivore"));
+        return dietNorm.includes(term);
       }
       if (config.category === "status") {
-        return normalize(a.conservationStatus).includes(term);
+        const statusNorm = normalize(a.conservationStatus || "");
+        if (statusNorm === term || statusNorm.includes(term)) return true;
+        return false;
       }
       if (config.category === "activity") {
-        return normalize(a.activityPattern).includes(term);
+        const actNorm = normalize(a.activityPattern || "");
+        return actNorm === term || actNorm.includes(term);
       }
       return normalize(a.diet).includes(term) || normalize(a.conservationStatus).includes(term) || normalize(a.activityPattern).includes(term);
     });
-  }, [availableAnimals, config]);
+  }, [availableAnimals, config, normalizedKey]);
 
   const filteredAnimals = useMemo(() => {
     if (!query.trim()) return traitAnimals;
