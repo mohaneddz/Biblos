@@ -202,6 +202,10 @@ export function AiNaturalistPanel({
 
   const matchedAnimalContext = useMemo(() => {
     if (!matchedAnimal) return "";
+    const imagesList = [
+      ...(matchedAnimal.heroImage ? [matchedAnimal.heroImage] : []),
+      ...matchedAnimal.images,
+    ].filter(Boolean);
     return [
       `[SPECIES] Species: ${matchedAnimal.commonName} (${matchedAnimal.scientificName})`,
       `Taxonomy: ${matchedAnimal.classification.kingdom} > ${matchedAnimal.classification.phylum} > ${matchedAnimal.classification.className} > ${matchedAnimal.classification.order} > ${matchedAnimal.classification.family} > ${matchedAnimal.classification.genus} > ${matchedAnimal.classification.species}`,
@@ -213,7 +217,8 @@ export function AiNaturalistPanel({
       `Continents: ${matchedAnimal.continents.join(", ")}`,
       `Conservation: ${matchedAnimal.conservationStatus}`,
       `Facts: ${matchedAnimal.coolFacts.join(" ")}`,
-    ].join("\n");
+      imagesList.length > 0 ? `Images: ${imagesList.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
   }, [matchedAnimal]);
 
   function handleNewChat() {
