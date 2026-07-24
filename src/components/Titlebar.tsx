@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ReactNode } from "react";
 import { CloseIcon, MaximizeIcon, MinimizeIcon } from "./icons";
+import { ApiStatusIndicator } from "./ApiStatusIndicator";
 
 async function runWindowAction(action: "minimize" | "toggleMaximize" | "close") {
   if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
@@ -47,17 +48,22 @@ export default function Titlebar() {
   return (
     <div
       data-tauri-drag-region
-      className="fixed inset-x-0 top-0 z-50 flex h-10 items-center justify-end border-b border-white/7 bg-black/30 backdrop-blur-xl"
+      className="fixed inset-x-0 top-0 z-50 flex h-10 items-center justify-between border-b border-white/7 bg-black/30 backdrop-blur-xl"
     >
-      <TitlebarButton id="titlebar-minimize" label="Minimize window" onClick={() => void runWindowAction("minimize")}>
-        <MinimizeIcon className="h-4 w-4" />
-      </TitlebarButton>
-      <TitlebarButton id="titlebar-maximize" label="Maximize window" onClick={() => void runWindowAction("toggleMaximize")}>
-        <MaximizeIcon className="h-4 w-4" />
-      </TitlebarButton>
-      <TitlebarButton id="titlebar-close" label="Close window" close onClick={() => void runWindowAction("close")}>
-        <CloseIcon className="h-4 w-4" />
-      </TitlebarButton>
+      <div className="pl-3">
+        <ApiStatusIndicator />
+      </div>
+      <div className="flex items-center">
+        <TitlebarButton id="titlebar-minimize" label="Minimize window" onClick={() => void runWindowAction("minimize")}>
+          <MinimizeIcon className="h-4 w-4" />
+        </TitlebarButton>
+        <TitlebarButton id="titlebar-maximize" label="Maximize window" onClick={() => void runWindowAction("toggleMaximize")}>
+          <MaximizeIcon className="h-4 w-4" />
+        </TitlebarButton>
+        <TitlebarButton id="titlebar-close" label="Close window" close onClick={() => void runWindowAction("close")}>
+          <CloseIcon className="h-4 w-4" />
+        </TitlebarButton>
+      </div>
     </div>
   );
 }
