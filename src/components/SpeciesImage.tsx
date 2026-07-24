@@ -57,8 +57,11 @@ export function SpeciesImage({
     currentUrl === coverData.thumbnailUrl ||
     errorIndex >= realImages.length;
 
+  const isAbsolute = className.includes("absolute") || className.includes("fixed");
+  const containerClass = `${isAbsolute ? "" : "relative "}overflow-hidden ${className}`.trim();
+
   return (
-    <div className={`relative overflow-hidden ${className}`}>
+    <div className={containerClass}>
       <img
         src={currentUrl}
         alt={animal.commonName}
