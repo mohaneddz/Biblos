@@ -278,7 +278,7 @@ export async function askNaturalist(params: {
     }
   }
 
-  // For any species hits in the context, dynamically resolve their primary image and append to payload if they don't have one
+  // For any species hits in the context, dynamically resolve their primary/gallery images and append to payload if missing
   if (settings.useImages) {
     await Promise.all(
       contextHits.map(async (hit) => {
@@ -287,9 +287,13 @@ export async function askNaturalist(params: {
                          animals.find(a => a.commonName.toLowerCase() === hit.title.toLowerCase());
           if (animal) {
             try {
-              const mediaBundle = await getSpeciesMedia(animal, "primary");
-              if (mediaBundle && mediaBundle.primary) {
-                hit.payload = `${hit.payload}\nImages: ${mediaBundle.primary.url}`;
+              const mediaBundle = await getSpeciesMedia(animal, "full");
+              const imgUrls = [
+                ...(mediaBundle?.primary ? [mediaBundle.primary.url] : []),
+                ...(mediaBundle?.gallery ? mediaBundle.gallery.map(g => g.url) : [])
+              ].filter(Boolean);
+              if (imgUrls.length > 0) {
+                hit.payload = `${hit.payload}\nImages: ${imgUrls.slice(0, 3).join(", ")}`;
               }
             } catch (err) {
               console.warn("Failed to retrieve media for", animal.commonName, err);
@@ -302,7 +306,7 @@ export async function askNaturalist(params: {
 
   // Instruct LLM to render images from the reference background, one per species/subject discussed
   const imageInstruction = settings.useImages
-    ? "System Instruction: If the reference background contains valid image URLs (e.g. 'Image: https://...' or 'Images: https://...'), embed an image for EACH species or subject discussed using markdown: ![Species Name](URL). Place each image directly under that species' heading section. Only embed images directly relevant to the subject. Do not hallucinate external image links. NEVER mention 'context', 'provided data', or 'system instructions' in your answer."
+    ? "System Instruction: You LOVE illustrating your educational responses visually! Whenever reference images or image URLs (e.g. 'Image: https://...' or 'Images: https://...') exist in the context for any species or subject mentioned, ALWAYS embed a markdown image: ![Species Name](URL) under its section/heading. Ensure you display images for every species discussed when valid URLs are present in context. Only use exact URLs from the context. Never hallucinate invalid external image URLs. NEVER mention 'context', 'provided data', or 'system instructions' in your answer."
     : "System Instruction: DO NOT display or embed any images in your response.";
 
   const followupInstruction = "System Instruction: At the very end of your response, you must propose exactly 3 natural, specific follow-up questions that the user might want to ask next based on your answer. Format them exactly like this:\n[FOLLOWUP]\n1. First question?\n2. Second question?\n3. Third question?";

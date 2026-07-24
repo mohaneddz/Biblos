@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import Titlebar from "./components/Titlebar";
 import { ToastContainer } from "./components/ToastContainer";
@@ -17,6 +17,20 @@ import Species from "./pages/Species";
 import SpeciesDetail from "./pages/SpeciesDetail";
 import TreeOfLife from "./pages/TreeOfLife";
 import TraitDetail from "./pages/TraitDetail";
+
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const contentShell = document.querySelector(".content-shell");
+    if (contentShell) {
+      contentShell.scrollTop = 0;
+    }
+  }, [pathname, search]);
+
+  return null;
+}
 
 function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -47,6 +61,7 @@ function Layout() {
 
   return (
     <div className="app-shell">
+      <ScrollToTop />
       <Titlebar />
       <div className={`app-workspace text-app-text ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
