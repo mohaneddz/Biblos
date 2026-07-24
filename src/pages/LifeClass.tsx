@@ -392,7 +392,7 @@ export default function LifeClass() {
       </div>
 
       {/* Hero Banner Header with Curated HD Cover Image */}
-      <section className={`relative min-h-[28rem] overflow-hidden rounded-[2.2rem] border border-white/12 bg-gradient-to-br ${coverData.gradient} shadow-2xl`}>
+      <section className={`relative min-h-[28rem] max-h-[32rem] overflow-hidden rounded-[2.2rem] border border-white/12 bg-gradient-to-br ${coverData.gradient} shadow-2xl`}>
         {coverAnimal && coverAnimal.images && coverAnimal.images.length > 0 ? (
           <SpeciesImage
             animal={coverAnimal}

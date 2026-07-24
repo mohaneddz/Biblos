@@ -221,6 +221,16 @@
     object-fit: cover;
   }
 
+  .prose img {
+    max-width: 100%;
+    height: auto;
+    max-height: 28rem;
+    object-fit: contain;
+    border-radius: 0.75rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+
   .media-vignette {
     position: absolute;
     inset: 0;

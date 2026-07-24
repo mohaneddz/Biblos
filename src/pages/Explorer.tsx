@@ -143,7 +143,7 @@ const DIET_CARDS = [
     label: "Piscivore",
     desc: "Fish-eating hunters",
     icon: MarineIcon,
-    imageUrl: "https://images.unsplash.com/photo-1551085254-e96b210df58a?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1552728089-57bdde30beb3?auto=format&fit=crop&w=1200&q=80",
   },
   {
     key: "filter feeder",
@@ -210,7 +210,7 @@ const CONSERVATION_CARDS = [
     label: "Extinct",
     desc: "No remaining individuals",
     icon: ShieldIcon,
-    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80",
   },
 ];
 

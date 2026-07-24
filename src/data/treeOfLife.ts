@@ -416,6 +416,24 @@ const staticLifeTree: TreeNode = {
                     },
                   ],
                 },
+                {
+                  id: "actinopterygii",
+                  label: "Actinopterygii",
+                  rank: "Class",
+                  description: "Ray-finned fishes making up over half of all living vertebrate species.",
+                  wikiTitle: "Actinopterygii",
+                  icon: "marine",
+                  scope: { className: "Actinopterygii" },
+                },
+                {
+                  id: "chondrichthyes",
+                  label: "Chondrichthyes",
+                  rank: "Class",
+                  description: "Cartilaginous fishes including sharks, rays, skates, and chimaeras.",
+                  wikiTitle: "Chondrichthyes",
+                  icon: "marine",
+                  scope: { className: "Chondrichthyes" },
+                },
               ],
             },
             {
@@ -446,6 +464,26 @@ const staticLifeTree: TreeNode = {
               wikiTitle: "Arthropod",
               icon: "invertebrate",
               scope: { phylum: "Arthropoda" },
+              children: [
+                {
+                  id: "insecta",
+                  label: "Insecta",
+                  rank: "Class",
+                  description: "Six-legged invertebrates comprising the most diverse class of animals on Earth.",
+                  wikiTitle: "Insect",
+                  icon: "invertebrate",
+                  scope: { className: "Insecta" },
+                },
+                {
+                  id: "arachnida",
+                  label: "Arachnida",
+                  rank: "Class",
+                  description: "Eight-legged terrestrial arthropods including spiders, scorpions, ticks, and mites.",
+                  wikiTitle: "Arachnid",
+                  icon: "invertebrate",
+                  scope: { className: "Arachnida" },
+                },
+              ],
             },
             {
               id: "cnidaria",
@@ -483,7 +521,7 @@ export function collectExpandableNodeIds(root: TreeNode) {
 }
 
 export function findTreeNode(root: TreeNode, id: string): TreeNode | null {
-  if (root.id === id) {
+  if (root.id.toLowerCase() === id.toLowerCase()) {
     return root;
   }
 
@@ -499,7 +537,7 @@ export function findTreeNode(root: TreeNode, id: string): TreeNode | null {
 
 export function findNodePath(root: TreeNode, id: string, trail: TreeNode[] = []): TreeNode[] | null {
   const next = [...trail, root];
-  if (root.id === id) {
+  if (root.id.toLowerCase() === id.toLowerCase()) {
     return next;
   }
 

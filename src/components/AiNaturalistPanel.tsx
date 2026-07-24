@@ -83,7 +83,7 @@ function renderMarkdownAndMath(text: string): string {
     if (!href || href.includes("undefined") || href.includes("null") || (!href.startsWith("http") && !href.startsWith("/"))) {
       return "";
     }
-    return `<img src="${href}" alt="${altText}" title="${imgTitle}" class="rounded-xl border border-white/10 my-3 max-h-64 object-cover shadow-md" onerror="this.style.display='none'" />`;
+    return `<img src="${href}" alt="${altText}" title="${imgTitle}" class="rounded-xl border border-white/10 my-3 max-h-72 w-auto max-w-full object-contain shadow-md" onerror="this.style.display='none'" />`;
   };
 
   let html = marked.parse(processed, { renderer, async: false }) as string;
