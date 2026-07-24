@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { SpeciesImage } from "./SpeciesImage";
 import type { Animal } from "../types/animal";
 import {
@@ -25,6 +25,7 @@ type AnimalCardProps = {
 };
 
 export function AnimalCard({ animal }: AnimalCardProps) {
+  const navigate = useNavigate();
   const [removed, setRemoved] = useState(false);
   const isFavorite = getFavorites().includes(animal.id);
   const isBookmarked = getBookmarkedSpecies().includes(animal.id);
@@ -335,6 +336,41 @@ export function AnimalCard({ animal }: AnimalCardProps) {
             >
               <FolderIcon className="h-4 w-4 text-app-accent" />
               <span>Organize in Folders...</span>
+            </button>
+
+            <hr className="my-1 border-t border-white/10" />
+
+            <button
+              type="button"
+              className={btnClass}
+              onClick={() => {
+                const search = new URLSearchParams(window.location.search);
+                const currentRight = search.get("right");
+                const query = new URLSearchParams();
+                query.set("left", animal.id);
+                if (currentRight && currentRight !== animal.id) query.set("right", currentRight);
+                navigate(`/compare?${query.toString()}`);
+                setMenuPos(null);
+              }}
+            >
+              <svg className="h-4 w-4 text-app-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+              <span>Compare as Left species</span>
+            </button>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={() => {
+                const search = new URLSearchParams(window.location.search);
+                const currentLeft = search.get("left");
+                const query = new URLSearchParams();
+                if (currentLeft && currentLeft !== animal.id) query.set("left", currentLeft);
+                query.set("right", animal.id);
+                navigate(`/compare?${query.toString()}`);
+                setMenuPos(null);
+              }}
+            >
+              <svg className="h-4 w-4 text-app-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+              <span>Compare as Right species</span>
             </button>
 
             <hr className="my-1 border-t border-white/10" />

@@ -1,21 +1,93 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CompareTable } from "../components/CompareTable";
 import { BirdIcon, GlobeGridIcon, MammalIcon, BrainSparkIcon } from "../components/icons";
-import { animals } from "../data/animals";
+import { animals, animalMap } from "../data/animals";
 import { PageHeader } from "../components/PageHeader";
-import { getSettings } from "../services/cache";
+import { getSettings, getCachedSpecies } from "../services/cache";
 import { generateComparisonSummary } from "../services/aiNaturalist";
+import { hydrateSpeciesProfile } from "../services/speciesStore";
+import { CompareSpeciesSelect } from "../components/CompareSpeciesSelect";
+import type { Animal } from "../types/animal";
 import { marked } from "marked";
 
 export default function Compare() {
-  const [leftId, setLeftId] = useState(animals[0].id);
-  const [rightId, setRightId] = useState(animals[1].id);
-  const left = animals.find((animal) => animal.id === leftId) ?? animals[0];
-  const right = animals.find((animal) => animal.id === rightId) ?? animals[1];
-  const selectors = [
-    { label: "Left species", value: leftId, setter: setLeftId },
-    { label: "Right species", value: rightId, setter: setRightId },
-  ];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlLeft = searchParams.get("left");
+  const urlRight = searchParams.get("right");
+
+  const [leftId, setLeftId] = useState(() => urlLeft || animals[0].id);
+  const [rightId, setRightId] = useState(() => urlRight || animals[1].id);
+
+  const [leftAnimal, setLeftAnimal] = useState<Animal | null>(
+    () => animalMap.get(leftId) ?? getCachedSpecies(leftId) ?? animals[0]
+  );
+  const [rightAnimal, setRightAnimal] = useState<Animal | null>(
+    () => animalMap.get(rightId) ?? getCachedSpecies(rightId) ?? animals[1]
+  );
+
+  // Sync state if URL query params change (e.g. via navigation or context menu)
+  useEffect(() => {
+    if (urlLeft && urlLeft !== leftId) setLeftId(urlLeft);
+    if (urlRight && urlRight !== rightId) setRightId(urlRight);
+  }, [urlLeft, urlRight]);
+
+  // Hydrate Left Animal profile from 21k index / static / cache
+  useEffect(() => {
+    let active = true;
+    const staticOrCached = animalMap.get(leftId) ?? getCachedSpecies(leftId);
+    if (staticOrCached) {
+      setLeftAnimal(staticOrCached);
+    } else {
+      hydrateSpeciesProfile(leftId)
+        .then((res) => {
+          if (active && res.animal) setLeftAnimal(res.animal);
+        })
+        .catch((err) => console.error("Error hydrating left compare species:", err));
+    }
+    return () => {
+      active = false;
+    };
+  }, [leftId]);
+
+  // Hydrate Right Animal profile from 21k index / static / cache
+  useEffect(() => {
+    let active = true;
+    const staticOrCached = animalMap.get(rightId) ?? getCachedSpecies(rightId);
+    if (staticOrCached) {
+      setRightAnimal(staticOrCached);
+    } else {
+      hydrateSpeciesProfile(rightId)
+        .then((res) => {
+          if (active && res.animal) setRightAnimal(res.animal);
+        })
+        .catch((err) => console.error("Error hydrating right compare species:", err));
+    }
+    return () => {
+      active = false;
+    };
+  }, [rightId]);
+
+  function handleSelectLeft(id: string, animal?: Animal) {
+    setLeftId(id);
+    if (animal) setLeftAnimal(animal);
+    const next = new URLSearchParams(searchParams);
+    next.set("left", id);
+    if (rightId) next.set("right", rightId);
+    setSearchParams(next);
+  }
+
+  function handleSelectRight(id: string, animal?: Animal) {
+    setRightId(id);
+    if (animal) setRightAnimal(animal);
+    const next = new URLSearchParams(searchParams);
+    if (leftId) next.set("left", leftId);
+    next.set("right", id);
+    setSearchParams(next);
+  }
+
+  const left = leftAnimal ?? animals[0];
+  const right = rightAnimal ?? animals[1];
 
   const settings = getSettings();
   const [summary, setSummary] = useState("");
@@ -45,42 +117,52 @@ export default function Compare() {
     <div className="page-frame">
       <PageHeader
         title="Compare"
-        description="The compare view now leans on icons, grouped sections, and direct ecological context so differences scan faster than a raw table."
+        description="Compare any two species side-by-side. Search across all 21,000+ indexed species or right-click any species in search to compare."
         storageKey="compare"
       />
 
-      <section className="page-card rounded-[1.75rem] p-5 mt-4">
+      {/* Searchable Species Selectors */}
+      <section className="page-card rounded-[1.75rem] p-5 mt-4 relative z-30 !overflow-visible">
         <div className="grid gap-4 md:grid-cols-2">
-          {selectors.map(({ label, value, setter }) => (
-            <label key={label} className="grid gap-2 text-sm text-app-muted">
-              <span>{label}</span>
-              <select value={value} onChange={(event) => setter(event.target.value)} className="rounded-[1rem] border border-white/8 bg-black/25 px-4 py-3 text-app-text cursor-pointer">
-                {animals.map((animal) => (
-                  <option key={animal.id} value={animal.id}>
-                    {animal.commonName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+          <CompareSpeciesSelect
+            label="Left species"
+            selectedId={leftId}
+            selectedAnimal={leftAnimal}
+            onSelect={handleSelectLeft}
+          />
+          <CompareSpeciesSelect
+            label="Right species"
+            selectedId={rightId}
+            selectedAnimal={rightAnimal}
+            onSelect={handleSelectRight}
+          />
         </div>
         {left.id === right.id ? (
-          <div className="warning-banner mt-4">You are comparing the same species on both sides. Change one selector to inspect differences.</div>
+          <div className="warning-banner mt-4">
+            You are comparing the same species on both sides. Select a different species in one of the search dropdowns to inspect differences.
+          </div>
         ) : null}
       </section>
 
+      {/* Species Profile Cards */}
       <section className="grid gap-4 xl:grid-cols-2">
         {[left, right].map((animal, index) => (
           <article key={animal.id} className="page-card rounded-[1.6rem] p-5">
             <div className="flex items-center gap-3 text-app-accent">
-              {animal.classification.className === "Mammalia" ? <MammalIcon className="h-5 w-5" /> : <BirdIcon className="h-5 w-5" />}
-              <span className="text-xs uppercase tracking-[0.22em]">{index === 0 ? "Left profile" : "Right profile"}</span>
+              {animal.classification?.className === "Mammalia" ? (
+                <MammalIcon className="h-5 w-5" />
+              ) : (
+                <BirdIcon className="h-5 w-5" />
+              )}
+              <span className="text-xs uppercase tracking-[0.22em]">
+                {index === 0 ? "Left profile" : "Right profile"}
+              </span>
             </div>
             <h2 className="mt-3 text-3xl font-semibold text-white">{animal.commonName}</h2>
             <p className="mt-1 italic text-app-muted">{animal.scientificName}</p>
             <p className="mt-4 text-sm leading-7 text-app-muted">{animal.shortDescription}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="tag-chip">{animal.classification.className}</span>
+              <span className="tag-chip">{animal.classification?.className || "Unknown Class"}</span>
               <span className="tag-chip">{animal.conservationStatus}</span>
               <span className="tag-chip">{animal.diet}</span>
             </div>
@@ -88,23 +170,31 @@ export default function Compare() {
         ))}
       </section>
 
+      {/* At a glance summary */}
       <section className="page-card rounded-[1.6rem] p-5">
         <div className="flex items-center gap-3 text-app-accent">
           <GlobeGridIcon className="h-5 w-5" />
           <span className="text-xs uppercase tracking-[0.22em]">At a glance</span>
         </div>
         <p className="mt-3 text-sm leading-7 text-app-muted">
-          {left.commonName} and {right.commonName} overlap in {left.habitat.filter((item) => right.habitat.includes(item)).join(", ") || "no currently shared habitat labels"}, while their conservation statuses are {left.conservationStatus} and {right.conservationStatus}.
+          {left.commonName} and {right.commonName} overlap in{" "}
+          {left.habitat?.filter((item) => right.habitat?.includes(item)).join(", ") ||
+            "no currently shared habitat labels"}
+          , while their conservation statuses are {left.conservationStatus} and {right.conservationStatus}.
         </p>
       </section>
 
+      {/* Detailed Side-by-Side Comparison Table */}
       <CompareTable left={left} right={right} />
 
+      {/* AI Naturalist Comparison Insights */}
       <section className="page-card rounded-[1.75rem] p-6 mt-4">
         <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
           <div className="flex items-center gap-3 text-app-accent">
             <BrainSparkIcon className="h-5 w-5 animate-pulse" />
-            <span className="text-xs uppercase tracking-[0.22em] font-semibold">AI Naturalist Comparison Insights</span>
+            <span className="text-xs uppercase tracking-[0.22em] font-semibold">
+              AI Naturalist Comparison Insights
+            </span>
           </div>
           {summary && !loading && (
             <button
@@ -128,7 +218,9 @@ export default function Compare() {
                 <span className="bg-app-accent" />
                 <span className="bg-app-accent" />
               </div>
-              <span>Generating comparative analysis for {left.commonName} and {right.commonName}...</span>
+              <span>
+                Generating comparative analysis for {left.commonName} and {right.commonName}...
+              </span>
             </div>
             <div className="space-y-2.5 animate-pulse pt-2">
               <div className="h-4 w-1/3 bg-white/5 rounded-md" />
