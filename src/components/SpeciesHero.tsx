@@ -13,9 +13,9 @@ export function SpeciesHero({
 }) {
   return (
     <section className="page-card overflow-hidden rounded-[2rem]">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.82fr)_minmax(22rem,1.18fr)]">
-        <div className="relative min-h-[18rem] md:min-h-[22rem] xl:min-h-[26rem] overflow-hidden border-b border-white/8 xl:border-b-0 xl:border-r">
-          <SpeciesImage animal={animal} className="h-full w-full" fitClassName="h-full w-full object-cover" />
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.82fr)_minmax(22rem,1.18fr)] items-stretch">
+        <div className="relative min-h-[18rem] md:min-h-[22rem] xl:min-h-[26rem] max-h-[30rem] overflow-hidden border-b border-white/8 xl:border-b-0 xl:border-r">
+          <SpeciesImage animal={animal} className="h-full w-full" fitClassName="h-full w-full object-cover object-center" />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,5,0.08),rgba(3,6,5,0.72))]" />
 
           {/* Overlay icons */}
