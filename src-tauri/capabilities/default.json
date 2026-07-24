@@ -16,24 +16,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
 
-    "fs:default",
-
     "core:webview:allow-create-webview-window",
-    "core:webview:allow-create-webview",
-
-    "shell:default",
-    "shell:allow-execute",
-    "shell:allow-open",
-    "shell:allow-spawn",
-    
-    "clipboard-manager:allow-read-text",
-    {
-      "identifier": "fs:allow-exists",
-      "allow": [
-        {
-          "path": "**"
-        }
-      ]
-    }
+    "core:webview:allow-create-webview"
   ]
 }
