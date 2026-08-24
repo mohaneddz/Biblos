@@ -2149,19 +2149,29 @@ async fn groq_enrich(
         ]
     });
 
-    let response = client
-        .post("https://api.groq.com/openai/v1/chat/completions")
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
+    for (attempt, delay_ms) in [0_u64, 1000, 3000].into_iter().enumerate() {
+        if delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        }
+        let response = client
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .bearer_auth(&api_key)
+            .json(&body)
+            .send()
+            .await
+            .ok()?;
+        if (response.status().as_u16() == 429 || response.status().is_server_error()) && attempt < 2
+        {
+            continue;
+        }
+        if !response.status().is_success() {
+            return None;
+        }
+        let payload: GroqChatResponse = response.json().await.ok()?;
+        let content = payload.choices.first()?.message.content.as_ref()?;
+        return serde_json::from_str(content).ok();
     }
-    let payload: GroqChatResponse = response.json().await.ok()?;
-    let content = payload.choices.first()?.message.content.as_ref()?;
-    serde_json::from_str(content).ok()
+    None
 }
 
 fn string_array(value: Option<&Value>) -> Vec<String> {
@@ -2341,6 +2351,7 @@ async fn hydrate_species_record(
         .as_ref()
         .and_then(|value| value.get("conservation_status"))
         .and_then(Value::as_str)
+        .or_else(|| record.conservation_status.as_deref())
         .unwrap_or_else(|| infer_conservation_status(&raw_text_parts, &gbif_details))
         .to_string();
 
