@@ -25,13 +25,19 @@ const defaultSettings: AppSettings = {
   theme: "dark-academic",
   aiEnabled: true,
   groqApiKey: "",
-  aiModel: "llama-3.3-70b-versatile",
+  aiModel: "openai/gpt-oss-120b",
   ecosystemMediaSource: "wikipedia",
   storageLocation: "Browser LocalStorage",
   enableErrorToasts: true,
   enableErrorConsoleLogs: true,
   youtubeApiKey: "",
 };
+
+function currentGroqModel(model: string | undefined) {
+  if (model === "llama-3.1-8b-instant") return "openai/gpt-oss-20b";
+  if (!model || model === "llama-3.3-70b-versatile") return "openai/gpt-oss-120b";
+  return model;
+}
 
 function hasStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -312,7 +318,12 @@ export function factoryReset() {
 }
 
 export function getSettings() {
-  return { ...defaultSettings, ...readJson<AppSettings>(SETTINGS_KEY, defaultSettings) };
+  const stored = readJson<AppSettings>(SETTINGS_KEY, defaultSettings);
+  return {
+    ...defaultSettings,
+    ...stored,
+    aiModel: currentGroqModel(stored.aiModel),
+  };
 }
 
 export function getAllCachedSpecies(): Animal[] {

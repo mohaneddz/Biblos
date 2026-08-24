@@ -676,8 +676,8 @@ export function AiNaturalistPanel({
                   onChange={(e) => saveSettings({ model: e.target.value })}
                   className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-2 text-sm text-app-text focus:outline-none focus:border-app-accent/30 transition"
                 >
-                  <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Versatile)</option>
-                  <option value="llama-3.1-8b-instant">Llama 3.1 8B (Instant)</option>
+                  <option value="openai/gpt-oss-120b">GPT-OSS 120B (Quality)</option>
+                  <option value="openai/gpt-oss-20b">GPT-OSS 20B (Fast)</option>
                   <option value="mixtral-8x7b-32768">Mixtral 8x7B (Large Context)</option>
                   <option value="gemma2-9b-it">Gemma 2 9B</option>
                 </select>

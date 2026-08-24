@@ -42,10 +42,16 @@ export type ChatSettings = {
   fontSize: "sm" | "base" | "lg" | "xl";
 };
 
+function currentChatModel(model: string | undefined) {
+  if (model === "llama-3.1-8b-instant") return "openai/gpt-oss-20b";
+  if (!model || model === "llama-3.3-70b-versatile") return "openai/gpt-oss-120b";
+  return model;
+}
+
 export function getChatSettings(): ChatSettings {
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
     return {
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       useLocal: true,
       useCached: true,
       useWebSearch: true,
@@ -58,7 +64,7 @@ export function getChatSettings(): ChatSettings {
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
-        model: parsed.model ?? "llama-3.3-70b-versatile",
+        model: currentChatModel(parsed.model),
         useLocal: parsed.useLocal ?? true,
         useCached: parsed.useCached ?? true,
         useWebSearch: parsed.useWebSearch ?? true,
@@ -70,7 +76,7 @@ export function getChatSettings(): ChatSettings {
     // ignore
   }
   return {
-    model: "llama-3.3-70b-versatile",
+    model: "openai/gpt-oss-120b",
     useLocal: true,
     useCached: true,
     useWebSearch: true,
@@ -364,7 +370,7 @@ export async function generateComparisonSummary(left: Animal, right: Animal) {
 
   const context = `System Instruction: Compare the two species in an interesting, deeply scientific, and engaging way. Focus on physical adaptations, evolutionary divergence (Tree of Life differences), dietary strategies, and conservation. Make the writing style elegant and structured using markdown headings (##). Keep the comparative insights rich and educational.\n\n[SPECIES 1 DETAILS]\n${leftContext}\n\n[SPECIES 2 DETAILS]\n${rightContext}`;
 
-  const selectedModel = settings.aiModel || "llama-3.3-70b-versatile";
+  const selectedModel = settings.aiModel || "openai/gpt-oss-120b";
 
   const answer = await invoke<string>("ask_ai_naturalist", {
     question,

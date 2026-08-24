@@ -181,7 +181,7 @@ async fn ask_ai_naturalist(
         .post("https://api.groq.com/openai/v1/chat/completions")
         .bearer_auth(api_key)
         .json(&json!({
-            "model": model.unwrap_or_else(|| "llama-3.3-70b-versatile".to_string()),
+            "model": model.unwrap_or_else(|| "openai/gpt-oss-120b".to_string()),
             "temperature": 0.2,
             "messages": messages,
         }))

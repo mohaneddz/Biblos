@@ -1943,7 +1943,11 @@ fn infer_continents(parts: &[String]) -> Vec<String> {
     found
 }
 
-async fn groq_enrich(raw: &Value, api_key_override: Option<&str>, model: Option<&str>) -> Option<Value> {
+async fn groq_enrich(
+    raw: &Value,
+    api_key_override: Option<&str>,
+    model: Option<&str>,
+) -> Option<Value> {
     dotenvy::dotenv().ok();
     // Settings-configured key (from the frontend) takes priority; .env is only
     // the fallback for users who never opened Settings.
@@ -1981,7 +1985,7 @@ async fn groq_enrich(raw: &Value, api_key_override: Option<&str>, model: Option<
     );
 
     let body = json!({
-        "model": model.filter(|value| !value.trim().is_empty()).unwrap_or("llama-3.3-70b-versatile"),
+        "model": model.filter(|value| !value.trim().is_empty()).unwrap_or("openai/gpt-oss-120b"),
         "temperature": 0.2,
         "response_format": { "type": "json_object" },
         "messages": [
@@ -2640,7 +2644,7 @@ pub async fn parse_query_to_filters(
 
     let selected_model = model
         .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| "llama-3.3-70b-versatile".to_owned());
+        .unwrap_or_else(|| "openai/gpt-oss-120b".to_owned());
 
     let system_prompt = "You are a taxonomy filter parser. Your ONLY job is to extract filter constraints from the user query. \
         You MUST NOT suggest, invent, or name any species. Return ONLY a JSON object with these optional string keys: \

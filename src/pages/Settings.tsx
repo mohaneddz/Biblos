@@ -80,8 +80,8 @@ export default function Settings() {
                   onChange={(event) => apply({ aiModel: event.target.value })}
                   className="rounded-[1rem] border border-white/8 bg-black/25 px-4 py-3 text-app-text cursor-pointer"
                 >
-                  <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Recommended)</option>
-                  <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Fast)</option>
+                  <option value="openai/gpt-oss-120b">openai/gpt-oss-120b (Recommended)</option>
+                  <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (Fast)</option>
                   <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
                   <option value="gemma2-9b-it">gemma2-9b-it</option>
                 </select>
