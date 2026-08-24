@@ -922,6 +922,153 @@ async fn seed_priority_class(
     Ok(())
 }
 
+/// Curated dinosaur-lineage species (Paleobiology Database, body-fossil
+/// taxa only — ichnotaxa/ootaxa and modern bird orders excluded).
+/// Bundled at compile time since there's no single GBIF highertaxon node
+/// that cleanly groups "Dinosauria" the way the priority classes above do.
+#[derive(Debug, Clone, Deserialize)]
+struct DinosaurSeed {
+    name: String,
+    common: Option<String>,
+    clade: Option<String>,
+    family: Option<String>,
+}
+
+const DINOSAUR_SEED_JSON: &str = include_str!("../data/dinosaurs.json");
+
+async fn seed_dinosaurs(
+    client: &Client,
+    db_path: PathBuf,
+    seen: &mut HashSet<i64>,
+    inserted: &mut usize,
+    limit: usize,
+) -> Result<()> {
+    let entries: Vec<DinosaurSeed> = serde_json::from_str(DINOSAUR_SEED_JSON)?;
+    let mut indexed = 0usize;
+
+    for entry in &entries {
+        if *inserted >= limit {
+            break;
+        }
+
+        let gbif_url = format!(
+            "https://api.gbif.org/v1/species/match?name={}&kingdom=Animalia",
+            urlencoding::encode(&entry.name)
+        );
+        let gbif_resp = match get_with_retry(client, &gbif_url).await {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        let gbif_data: Value = match gbif_resp.json().await {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        let match_type = gbif_data
+            .get("matchType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("NONE");
+        if match_type == "NONE" {
+            continue;
+        }
+        let gbif_kingdom = gbif_data
+            .get("kingdom")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !gbif_kingdom.is_empty() && gbif_kingdom != "animalia" {
+            continue;
+        }
+        let gbif_taxon_key = match gbif_data.get("usageKey").and_then(|v| v.as_i64()) {
+            Some(k) if k > 0 => k,
+            _ => continue,
+        };
+        if !seen.insert(gbif_taxon_key) {
+            continue;
+        }
+
+        let canonical = gbif_data
+            .get("canonicalName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&entry.name)
+            .to_owned();
+        let sci_name = gbif_data
+            .get("scientificName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&entry.name)
+            .to_owned();
+        let genus = gbif_data
+            .get("genus")
+            .and_then(|v| v.as_str())
+            .map(ToOwned::to_owned)
+            .or_else(|| canonical.split_whitespace().next().map(ToOwned::to_owned));
+
+        // Most non-avian dinosaur species have no popular vernacular name —
+        // the genus name itself is how the public refers to them (nobody
+        // says "tyrant lizard king", everyone says "Tyrannosaurus").
+        let common_name = entry
+            .common
+            .clone()
+            .or_else(|| genus.clone())
+            .unwrap_or_else(|| canonical.clone());
+
+        let record = IndexRecord {
+            gbif_taxon_key,
+            scientific_name: sci_name,
+            canonical_name: canonical,
+            common_name: Some(common_name),
+            aliases: Vec::new(),
+            inat_taxon_id: None,
+            popularity_score: 0.0,
+            rank: "SPECIES".into(),
+            kingdom: gbif_data
+                .get("kingdom")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned),
+            phylum: gbif_data
+                .get("phylum")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned),
+            class_name: Some("Reptilia".into()),
+            // PBDB exposes Ornithischia/Saurischia as its `class` value for
+            // many taxa, but leaves numerous theropods at Reptilia. Under the
+            // traditional dinosaur split, every remaining dinosaur-lineage
+            // taxon belongs to Saurischia (including extinct bird lineages).
+            order_name: Some(entry.clade.clone().unwrap_or_else(|| "Saurischia".into())),
+            family: gbif_data
+                .get("family")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+                .or_else(|| entry.family.clone()),
+            genus,
+            habitat: None,
+            diet: None,
+            activity_pattern: None,
+            conservation_status: Some("Extinct".into()),
+            continents: None,
+            source: "PBDB+GBIF".into(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        let connection = open_connection(&db_path)?;
+        if upsert_species_index(&connection, &record).is_ok() {
+            *inserted += 1;
+            indexed += 1;
+            if indexed.is_multiple_of(25) {
+                println!(
+                    "--> Dinosaurs: indexed {indexed}/{} ({}/{})",
+                    entries.len(),
+                    *inserted,
+                    limit
+                );
+            }
+        }
+    }
+
+    println!("--> Dinosaurs: indexed {indexed}/{} total", entries.len());
+    Ok(())
+}
+
 pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> {
     let path = initialize_database(app)?;
     let connection = open_connection(&path)?;
@@ -948,6 +1095,12 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
             return Ok(inserted);
         }
     }
+
+    // Curated dinosaur-lineage species (Jurassic update) go first and get first
+    // claim on the budget — priority_classes below share one quota where the
+    // first class with enough supply can consume all of it, so anything
+    // placed after that loop isn't guaranteed to run at all.
+    seed_dinosaurs(&client, path.clone(), &mut seen, &mut inserted, limit).await?;
 
     // Prioritize low-coverage classes before the broad animal seed. These are
     // real GBIF classes under sparsely represented branches of the life tree.
@@ -1652,15 +1805,26 @@ fn infer_diet(text: &str) -> &'static str {
         "Piscivore"
     } else if value.contains("insectivor") {
         "Insectivore"
-    } else if value.contains("filter feed") || value.contains("filter-feed") || value.contains("planktivor") {
+    } else if value.contains("filter feed")
+        || value.contains("filter-feed")
+        || value.contains("planktivor")
+    {
         "Filter Feeder"
     } else if value.contains("detritivor") || value.contains("scaveng") {
         "Detritivore"
-    } else if value.contains("herbiv") || value.contains("folivor") || value.contains("granivor") || value.contains("nectarivor") {
+    } else if value.contains("herbiv")
+        || value.contains("folivor")
+        || value.contains("granivor")
+        || value.contains("nectarivor")
+    {
         "Herbivore"
     } else if value.contains("omniv") {
         "Omnivore"
-    } else if value.contains("carniv") || value.contains("predator") || value.contains("prey on") || value.contains("preys on") {
+    } else if value.contains("carniv")
+        || value.contains("predator")
+        || value.contains("prey on")
+        || value.contains("preys on")
+    {
         "Carnivore"
     } else {
         "Unknown"
@@ -1671,11 +1835,17 @@ fn infer_activity(text: &str) -> &'static str {
     let value = normalize(text);
     if value.contains("nocturn") {
         "Nocturnal"
-    } else if value.contains("crepus") || value.contains("dawn and dusk") || value.contains("dusk and dawn") {
+    } else if value.contains("crepus")
+        || value.contains("dawn and dusk")
+        || value.contains("dusk and dawn")
+    {
         "Crepuscular"
     } else if value.contains("cathemer") {
         "Cathemeral"
-    } else if value.contains("diurn") || value.contains("active during the day") || value.contains("active by day") {
+    } else if value.contains("diurn")
+        || value.contains("active during the day")
+        || value.contains("active by day")
+    {
         "Diurnal"
     } else {
         "Unknown"
@@ -1862,8 +2032,10 @@ async fn hydrate_species_record(
     .await
     .ok_or_else(|| anyhow!("GBIF details not found"))?;
 
+    // Wikipedia's summary endpoint expects a page title and usually rejects
+    // GBIF names containing authorship (for example, "Osborn, 1905").
     let wiki_summary =
-        if let Some(summary) = fetch_wikipedia_summary(&client, &record.scientific_name).await {
+        if let Some(summary) = fetch_wikipedia_summary(&client, &record.canonical_name).await {
             Some(summary)
         } else if let Some(common_name) = record.common_name.as_deref() {
             fetch_wikipedia_summary(&client, common_name).await
@@ -1872,7 +2044,7 @@ async fn hydrate_species_record(
         };
 
     let wikidata =
-        if let Some(summary) = fetch_wikidata_search(&client, &record.scientific_name).await {
+        if let Some(summary) = fetch_wikidata_search(&client, &record.canonical_name).await {
             Some(summary)
         } else if let Some(common_name) = record.common_name.as_deref() {
             fetch_wikidata_search(&client, common_name).await
@@ -1882,7 +2054,7 @@ async fn hydrate_species_record(
 
     let inat = fetch_inaturalist_taxon(
         &client,
-        &record.scientific_name,
+        &record.canonical_name,
         record.common_name.as_deref(),
     )
     .await;
@@ -2038,10 +2210,22 @@ async fn hydrate_species_record(
         .as_ref()
         .and_then(|value| value.get("average_lifespan_years"))
         .and_then(Value::as_f64);
-    let length_cm = ai.as_ref().and_then(|value| value.get("length_cm")).and_then(Value::as_f64);
-    let height_cm = ai.as_ref().and_then(|value| value.get("height_cm")).and_then(Value::as_f64);
-    let wingspan_cm = ai.as_ref().and_then(|value| value.get("wingspan_cm")).and_then(Value::as_f64);
-    let weight_kg = ai.as_ref().and_then(|value| value.get("weight_kg")).and_then(Value::as_f64);
+    let length_cm = ai
+        .as_ref()
+        .and_then(|value| value.get("length_cm"))
+        .and_then(Value::as_f64);
+    let height_cm = ai
+        .as_ref()
+        .and_then(|value| value.get("height_cm"))
+        .and_then(Value::as_f64);
+    let wingspan_cm = ai
+        .as_ref()
+        .and_then(|value| value.get("wingspan_cm"))
+        .and_then(Value::as_f64);
+    let weight_kg = ai
+        .as_ref()
+        .and_then(|value| value.get("weight_kg"))
+        .and_then(Value::as_f64);
 
     Ok(json!({
         "id": make_species_id(record.gbif_taxon_key),
