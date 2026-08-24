@@ -926,28 +926,103 @@ async fn seed_priority_class(
 /// Bundled at compile time since there's no single GBIF highertaxon node
 /// that cleanly groups "Dinosauria" the way the priority classes above do.
 #[derive(Debug, Clone, Deserialize)]
-struct DinosaurSeed {
+struct FossilSeed {
     name: String,
     common: Option<String>,
     clade: Option<String>,
+    group: Option<String>,
+    phylum: Option<String>,
+    #[serde(rename = "class")]
+    class_name: Option<String>,
+    order: Option<String>,
     family: Option<String>,
 }
 
 const DINOSAUR_SEED_JSON: &str = include_str!("../data/dinosaurs.json");
+const PREHISTORIC_SEED_JSON: &str = include_str!("../data/prehistoric_species.json");
 
-async fn seed_dinosaurs(
+struct FossilSeedConfig<'a> {
+    label: &'a str,
+    source: &'a str,
+    default_class: Option<&'a str>,
+    default_order: Option<&'a str>,
+    clade_as_order: bool,
+}
+
+fn synapsid_overrides(entry: &FossilSeed) -> (Option<String>, Option<String>) {
+    if entry.group.as_deref() != Some("Synapsida")
+        || entry.class_name.as_deref() == Some("Mammalia")
+    {
+        return (None, None);
+    }
+
+    let order = if entry.order.as_deref() == Some("Cotylosauria") {
+        match entry.family.as_deref() {
+            Some("Sphenacodontidae") => "Sphenacodontia".to_owned(),
+            Some("Edaphosauridae") => "Eupelycosauria".to_owned(),
+            _ => "Synapsida".to_owned(),
+        }
+    } else {
+        entry
+            .order
+            .clone()
+            .unwrap_or_else(|| "Synapsida".to_owned())
+    };
+    (Some("Synapsida".to_owned()), Some(order))
+}
+
+fn refresh_existing_fossil(
+    connection: &Connection,
+    entry: &FossilSeed,
+    config: &FossilSeedConfig<'_>,
+) -> Result<()> {
+    let (class_override, order_override) = synapsid_overrides(entry);
+    connection.execute(
+        "
+        UPDATE species_index SET
+          class_name = coalesce(?1, class_name),
+          order_name = coalesce(?2, order_name),
+          family = coalesce(?3, family),
+          conservation_status = 'Extinct',
+          source = ?4,
+          updated_at = ?5
+        WHERE lower(canonical_name) = lower(?6)
+        ",
+        params![
+            class_override,
+            order_override,
+            entry.family.as_deref(),
+            config.source,
+            Utc::now().to_rfc3339(),
+            entry.name.as_str(),
+        ],
+    )?;
+    Ok(())
+}
+
+async fn seed_fossils(
     client: &Client,
     db_path: PathBuf,
     seen: &mut HashSet<i64>,
+    seen_names: &mut HashSet<String>,
     inserted: &mut usize,
     limit: usize,
+    seed_json: &str,
+    config: FossilSeedConfig<'_>,
 ) -> Result<()> {
-    let entries: Vec<DinosaurSeed> = serde_json::from_str(DINOSAUR_SEED_JSON)?;
+    let entries: Vec<FossilSeed> = serde_json::from_str(seed_json)?;
     let mut indexed = 0usize;
 
     for entry in &entries {
         if *inserted >= limit {
             break;
+        }
+
+        let seed_name_key = normalize(&entry.name);
+        if seen_names.contains(&seed_name_key) {
+            let connection = open_connection(&db_path)?;
+            refresh_existing_fossil(&connection, entry, &config)?;
+            continue;
         }
 
         let gbif_url = format!(
@@ -982,9 +1057,7 @@ async fn seed_dinosaurs(
             Some(k) if k > 0 => k,
             _ => continue,
         };
-        if !seen.insert(gbif_taxon_key) {
-            continue;
-        }
+        let is_new_key = seen.insert(gbif_taxon_key);
 
         let canonical = gbif_data
             .get("canonicalName")
@@ -996,6 +1069,10 @@ async fn seed_dinosaurs(
             .and_then(|v| v.as_str())
             .unwrap_or(&entry.name)
             .to_owned();
+        let canonical_key = normalize(&canonical);
+        if is_new_key && seen_names.contains(&canonical_key) {
+            continue;
+        }
         let genus = gbif_data
             .get("genus")
             .and_then(|v| v.as_str())
@@ -1010,6 +1087,14 @@ async fn seed_dinosaurs(
             .clone()
             .or_else(|| genus.clone())
             .unwrap_or_else(|| canonical.clone());
+
+        let (class_override, order_override) = synapsid_overrides(entry);
+        let pbdb_class = if class_override.is_some() {
+            class_override
+        } else {
+            entry.class_name.clone()
+        };
+        let pbdb_order = order_override.or_else(|| entry.order.clone());
 
         let record = IndexRecord {
             gbif_taxon_key,
@@ -1027,13 +1112,35 @@ async fn seed_dinosaurs(
             phylum: gbif_data
                 .get("phylum")
                 .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned),
-            class_name: Some("Reptilia".into()),
+                .map(ToOwned::to_owned)
+                .or_else(|| entry.phylum.clone()),
+            class_name: config
+                .default_class
+                .map(ToOwned::to_owned)
+                .or(pbdb_class)
+                .or_else(|| {
+                    gbif_data
+                        .get("class")
+                        .and_then(|v| v.as_str())
+                        .map(ToOwned::to_owned)
+                }),
             // PBDB exposes Ornithischia/Saurischia as its `class` value for
             // many taxa, but leaves numerous theropods at Reptilia. Under the
             // traditional dinosaur split, every remaining dinosaur-lineage
             // taxon belongs to Saurischia (including extinct bird lineages).
-            order_name: Some(entry.clade.clone().unwrap_or_else(|| "Saurischia".into())),
+            order_name: if config.clade_as_order {
+                entry
+                    .clade
+                    .clone()
+                    .or_else(|| config.default_order.map(ToOwned::to_owned))
+            } else {
+                gbif_data
+                    .get("order")
+                    .and_then(|v| v.as_str())
+                    .map(ToOwned::to_owned)
+                    .or(pbdb_order)
+                    .or_else(|| entry.group.clone())
+            },
             family: gbif_data
                 .get("family")
                 .and_then(|v| v.as_str())
@@ -1045,17 +1152,19 @@ async fn seed_dinosaurs(
             activity_pattern: None,
             conservation_status: Some("Extinct".into()),
             continents: None,
-            source: "PBDB+GBIF".into(),
+            source: config.source.into(),
             updated_at: Utc::now().to_rfc3339(),
         };
 
         let connection = open_connection(&db_path)?;
-        if upsert_species_index(&connection, &record).is_ok() {
+        if upsert_species_index(&connection, &record).is_ok() && is_new_key {
+            seen_names.insert(canonical_key);
             *inserted += 1;
             indexed += 1;
             if indexed.is_multiple_of(25) {
                 println!(
-                    "--> Dinosaurs: indexed {indexed}/{} ({}/{})",
+                    "--> {}: indexed {indexed}/{} ({}/{})",
+                    config.label,
                     entries.len(),
                     *inserted,
                     limit
@@ -1064,7 +1173,11 @@ async fn seed_dinosaurs(
         }
     }
 
-    println!("--> Dinosaurs: indexed {indexed}/{} total", entries.len());
+    println!(
+        "--> {}: indexed {indexed}/{} total",
+        config.label,
+        entries.len()
+    );
     Ok(())
 }
 
@@ -1076,14 +1189,19 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
         .timeout(std::time::Duration::from_secs(20))
         .build()?;
     let mut seen = HashSet::new();
+    let mut seen_names = HashSet::new();
     let mut inserted: usize;
 
     // Load existing keys from database so we don't re-fetch
     {
-        let mut stmt = connection.prepare("SELECT gbif_taxon_key FROM species_index")?;
-        let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
-        for key in rows.flatten() {
+        let mut stmt =
+            connection.prepare("SELECT gbif_taxon_key, canonical_name FROM species_index")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for (key, canonical_name) in rows.flatten() {
             seen.insert(key);
+            seen_names.insert(normalize(&canonical_name));
         }
         inserted = seen.len();
         println!(
@@ -1099,7 +1217,44 @@ pub async fn seed_index(app: Option<&AppHandle>, limit: usize) -> Result<usize> 
     // claim on the budget — priority_classes below share one quota where the
     // first class with enough supply can consume all of it, so anything
     // placed after that loop isn't guaranteed to run at all.
-    seed_dinosaurs(&client, path.clone(), &mut seen, &mut inserted, limit).await?;
+    seed_fossils(
+        &client,
+        path.clone(),
+        &mut seen,
+        &mut seen_names,
+        &mut inserted,
+        limit,
+        DINOSAUR_SEED_JSON,
+        FossilSeedConfig {
+            label: "Dinosaurs",
+            source: "PBDB+GBIF",
+            default_class: Some("Reptilia"),
+            default_order: Some("Saurischia"),
+            clade_as_order: true,
+        },
+    )
+    .await?;
+
+    // Broader prehistoric life follows dinosaurs so pterosaurs, marine
+    // reptiles, synapsids, trilobites, ammonoids, placoderms, eurypterids,
+    // and other fossil groups are represented before modern-animal phases.
+    seed_fossils(
+        &client,
+        path.clone(),
+        &mut seen,
+        &mut seen_names,
+        &mut inserted,
+        limit,
+        PREHISTORIC_SEED_JSON,
+        FossilSeedConfig {
+            label: "Prehistoric life",
+            source: "PBDB+GBIF Prehistoric",
+            default_class: None,
+            default_order: None,
+            clade_as_order: false,
+        },
+    )
+    .await?;
 
     // Prioritize low-coverage classes before the broad animal seed. These are
     // real GBIF classes under sparsely represented branches of the life tree.
