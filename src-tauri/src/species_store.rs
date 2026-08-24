@@ -357,25 +357,24 @@ fn open_connection(path: &Path) -> Result<Connection> {
           tokenize = 'unicode61 remove_diacritics 1'
         );
 
-        CREATE TRIGGER IF NOT EXISTS species_index_ai AFTER INSERT ON species_index BEGIN
+        -- Recreate these triggers so existing databases receive trigger fixes.
+        DROP TRIGGER IF EXISTS species_index_ai;
+        DROP TRIGGER IF EXISTS species_index_ad;
+        DROP TRIGGER IF EXISTS species_index_au;
+
+        CREATE TRIGGER species_index_ai AFTER INSERT ON species_index BEGIN
           INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
           VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name,
                   coalesce(new.common_name, ''), coalesce(new.aliases, ''),
                   coalesce(new.class_name, ''), coalesce(new.family, ''), coalesce(new.genus, ''));
         END;
 
-        CREATE TRIGGER IF NOT EXISTS species_index_ad AFTER DELETE ON species_index BEGIN
-          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
-          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name,
-                 coalesce(old.common_name, ''), coalesce(old.aliases, ''),
-                 coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+        CREATE TRIGGER species_index_ad AFTER DELETE ON species_index BEGIN
+          DELETE FROM species_index_fts WHERE rowid = old.rowid;
         END;
 
-        CREATE TRIGGER IF NOT EXISTS species_index_au AFTER UPDATE ON species_index BEGIN
-          INSERT INTO species_index_fts(species_index_fts, rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
-          VALUES('delete', old.rowid, old.id, old.scientific_name, old.canonical_name,
-                 coalesce(old.common_name, ''), coalesce(old.aliases, ''),
-                 coalesce(old.class_name, ''), coalesce(old.family, ''), coalesce(old.genus, ''));
+        CREATE TRIGGER species_index_au AFTER UPDATE ON species_index BEGIN
+          DELETE FROM species_index_fts WHERE rowid = old.rowid;
           INSERT INTO species_index_fts (rowid, id, scientific_name, canonical_name, common_name, aliases, class_name, family, genus)
           VALUES (new.rowid, new.id, new.scientific_name, new.canonical_name,
                   coalesce(new.common_name, ''), coalesce(new.aliases, ''),
