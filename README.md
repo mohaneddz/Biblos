@@ -13,17 +13,30 @@ Biblos is a Tauri desktop application for exploring species, ecosystems, taxonom
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/mohaneddz/Biblos?style=for-the-badge)](https://github.com/mohaneddz/Biblos/releases/latest)
 
 ---
 
 ## Features
 
-- Explore curated species, ecosystems, and the tree of life
+- Explore a 41,000-record local species index, ecosystems, and the tree of life
 - Species search, detailed profiles, classification tree, and comparison view
+- Discover more than 10,600 PBDB+GBIF fossil records, including dinosaurs, pterosaurs, marine reptiles, ancient synapsids, Ice Age mammals, trilobites, ammonoids, placoderms, and eurypterids
 - Personal collections and folders
 - Optional live data and media services, including GBIF, iNaturalist, Wikipedia, and YouTube
 - AI Naturalist workspace and natural-language species tooling
 - Rust index-seeding command for local data setup, bundled with a pre-seeded species database
+
+---
+
+## Prehistoric Life Update — 0.9.0
+
+- Expanded the local catalog from 23,259 to 41,000 indexed records.
+- Added 1,580 dinosaur records and 9,043 records from the broader prehistoric-life pass.
+- Added Ornithischia and Saurischia branches to the interactive Tree of Life.
+- Verified rich profiles for major dinosaurs and prehistoric animals, including Tyrannosaurus, Allosaurus, Diplodocus, Pteranodon, Ichthyosaurus, Liopleurodon, Mosasaurus, Dimetrodon, Dunkleosteus, woolly mammoth, and Smilodon.
+- Migrated AI enrichment to current Groq-hosted GPT-OSS models, with retry handling and reliable extinct-status fallbacks.
+- Added reproducible PBDB dataset generation and canonical-name deduplication for fossil seeding.
 
 ---
 
@@ -81,6 +94,7 @@ src/
 `-- main.tsx                # React entry point
 
 src-tauri/
+|-- data/                   # PBDB dinosaur and broader prehistoric seed datasets
 |-- src/                    # Tauri backend and seed binary
 |-- tauri.conf.json         # Desktop window and bundle configuration
 `-- Cargo.toml              # Rust dependencies
@@ -123,6 +137,13 @@ pnpm preview       # Preview the production frontend build
 pnpm tauri dev     # Run the desktop app
 pnpm tauri build   # Build the production desktop bundle
 pnpm seed:index    # Run the Biblos Rust index seeder
+node scripts/fetch-prehistoric-species.mjs # Regenerate the PBDB prehistoric dataset
+```
+
+To rebuild the complete local catalog used by the 0.9.0 release:
+
+```bash
+pnpm seed:index 41000
 ```
 
 ---
@@ -141,6 +162,7 @@ pnpm seed:index    # Run the Biblos Rust index seeder
 ## Data and Media Notes
 
 - Curated data is bundled under `src/data` so the core experience is immediately explorable.
+- Dinosaur and prehistoric seed datasets are sourced from the Paleobiology Database and matched against the GBIF taxonomy backbone before indexing.
 - Service modules provide optional live species, taxonomy, media, and video enrichment.
 - The app includes caching, error reporting, confirmation, and toast services to support long-running exploration workflows.
 - Some advanced features, such as 3D viewing and AI Naturalist tools, rely on their respective frontend service modules and available external providers.
