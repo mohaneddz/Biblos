@@ -1,3 +1,5 @@
+![Biblos](screenshots/cover.avif)
+
 <h1 style="font-family: Arial, sans-serif; font-size: 36px; color: #4F46E5; display: flex; align-items: center; gap: 12px; border-bottom: 3px solid #4F46E5; padding-bottom: 8px;">
   Biblos — Interactive Biodiversity Explorer
 </h1>
